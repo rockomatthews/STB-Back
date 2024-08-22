@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { login, verifyAuth, getOfficialRaces } = require('./iRacingApi');
+const { login, verifyAuth, getOfficialRaces, searchIRacingName } = require('./iRacingApi');
 
 dotenv.config();
 
@@ -14,8 +14,12 @@ const PORT = process.env.PORT || 3001;
 // Middleware to check authentication
 const checkAuth = async (req, res, next) => {
   try {
-    await verifyAuth();
-    next();
+    const isAuthenticated = await verifyAuth();
+    if (isAuthenticated) {
+      next();
+    } else {
+      res.status(401).json({ error: 'Authentication failed' });
+    }
   } catch (error) {
     res.status(401).json({ error: 'Authentication failed' });
   }
@@ -35,13 +39,32 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
   }
 });
 
+app.get('/api/search-iracing-name', checkAuth, async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name) {
+      return res.status(400).json({ error: 'Name parameter is required' });
+    }
+
+    const result = await searchIRacingName(name);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in search-iracing-name endpoint:', error);
+    res.status(500).json({ error: 'An error occurred while searching for the iRacing name' });
+  }
+});
+
 // Start the server
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   try {
-    await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
-    console.log('Successfully logged in to iRacing API');
+    const loginSuccess = await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
+    if (loginSuccess) {
+      console.log('Successfully logged in to iRacing API');
+    } else {
+      console.error('Failed to log in to iRacing API');
+    }
   } catch (error) {
-    console.error('Failed to log in to iRacing API:', error);
+    console.error('Error during iRacing API login:', error);
   }
 });

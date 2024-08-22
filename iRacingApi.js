@@ -71,7 +71,49 @@ async function verifyAuth() {
   }
 }
 
+async function searchIRacingName(name) {
+  try {
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    const response = await instance.get(`${BASE_URL}/data/lookup/drivers`, {
+      params: {
+        search: name
+      },
+      headers: {
+        'Cookie': cookieString
+      }
+    });
+
+    if (response.data && response.data.link) {
+      const driverDataResponse = await instance.get(response.data.link);
+      const drivers = driverDataResponse.data.drivers;
+
+      if (drivers && drivers.length > 0) {
+        // Return the first exact match, if found
+        const exactMatch = drivers.find(driver => 
+          driver.display_name.toLowerCase() === name.toLowerCase()
+        );
+
+        if (exactMatch) {
+          return {
+            exists: true,
+            name: exactMatch.display_name,
+            id: exactMatch.cust_id
+          };
+        }
+      }
+    }
+
+    return { exists: false };
+  } catch (error) {
+    console.error('Error searching for iRacing name:', error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   login,
-  verifyAuth
+  verifyAuth,
+  searchIRacingName
 };
