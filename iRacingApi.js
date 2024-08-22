@@ -78,12 +78,16 @@ async function searchIRacingName(name) {
 
     const response = await instance.get(`${BASE_URL}/data/lookup/drivers`, {
       params: {
-        search: name
+        search_term: name,  // Changed from 'search' to 'search_term'
+        lowerbound: 1,
+        upperbound: 25
       },
       headers: {
         'Cookie': cookieString
       }
     });
+
+    console.log('Search response:', response.data);  // Log the response for debugging
 
     if (response.data && response.data.link) {
       const driverDataResponse = await instance.get(response.data.link);
@@ -108,6 +112,10 @@ async function searchIRacingName(name) {
     return { exists: false };
   } catch (error) {
     console.error('Error searching for iRacing name:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     throw error;
   }
 }

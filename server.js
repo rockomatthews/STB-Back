@@ -10,12 +10,14 @@ const app = express();
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.speedtrapbets.com';
 
 app.use(cors({
-  origin: 'https://www.speedtrapbets.com', // Replace with your frontend URL
+  origin: FRONTEND_URL,
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
+
+const PORT = process.env.PORT || 3001;
 
 // Middleware to check authentication
 const checkAuth = async (req, res, next) => {
@@ -52,15 +54,16 @@ app.get('/api/search-iracing-name', checkAuth, async (req, res) => {
       return res.status(400).json({ error: 'Name parameter is required' });
     }
 
+    console.log('Searching for:', name);  // Log the search term
+
     const result = await searchIRacingName(name);
+    console.log('Search result:', result);  // Log the search result
     res.json(result);
   } catch (error) {
     console.error('Error in search-iracing-name endpoint:', error);
     res.status(500).json({ error: 'An error occurred while searching for the iRacing name' });
   }
 });
-
-const PORT = process.env.PORT || 3001;
 
 // Start the server
 app.listen(PORT, async () => {
