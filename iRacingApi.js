@@ -93,11 +93,12 @@ async function searchIRacingName(name) {
       const driverDataResponse = await instance.get(response.data.link);
       console.log('Driver data response:', JSON.stringify(driverDataResponse.data, null, 2));
 
-      const drivers = driverDataResponse.data.drivers || driverDataResponse.data.rows || [];
+      // The driver data is directly in the response, not in a 'drivers' or 'rows' property
+      const drivers = Array.isArray(driverDataResponse.data) ? driverDataResponse.data : [];
 
       console.log('Drivers found:', JSON.stringify(drivers, null, 2));
 
-      if (drivers && drivers.length > 0) {
+      if (drivers.length > 0) {
         // Look for an exact match or a case-insensitive partial match
         const matchingDriver = drivers.find(driver => 
           driver.display_name.toLowerCase() === name.toLowerCase() ||
