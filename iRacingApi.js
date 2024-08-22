@@ -91,7 +91,7 @@ async function searchIRacingName(name) {
 
     if (response.data && response.data.link) {
       const driverDataResponse = await instance.get(response.data.link);
-      const drivers = driverDataResponse.data.drivers;
+      const drivers = driverDataResponse.data.rows;  // Change this line
 
       console.log('Drivers found:', drivers);
 

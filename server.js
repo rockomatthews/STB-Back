@@ -62,11 +62,11 @@ app.get('/api/search-iracing-name', checkAuth, async (req, res) => {
     if (result.exists) {
       res.json({ exists: true, name: result.name, id: result.id });
     } else {
-      res.json({ exists: false, message: `${name} has not created an iRacing account yet.` });
+      res.json({ exists: false, message: `${name} has not been found in iRacing.` });
     }
   } catch (error) {
     console.error('Error in search-iracing-name endpoint:', error);
-    res.status(500).json({ error: 'An error occurred while searching for the iRacing name' });
+    res.status(500).json({ error: 'An error occurred while searching for the iRacing name', details: error.message });
   }
 });
 
