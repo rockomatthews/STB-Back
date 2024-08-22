@@ -10,7 +10,7 @@ const app = express();
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.speedtrapbets.com';
 
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: 'https://www.speedtrapbets.com', // Replace with your frontend URL
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
