@@ -19,21 +19,46 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 
-// Middleware to check authentication
+const MAX_LOGIN_ATTEMPTS = 3;
+const LOGIN_RETRY_DELAY = 5000; // 5 seconds
+
+async function attemptLogin(attempts = 0) {
+  try {
+    const loginSuccess = await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
+    if (loginSuccess) {
+      console.log('Successfully logged in to iRacing API');
+      return true;
+    } else {
+      throw new Error('Login failed');
+    }
+  } catch (error) {
+    console.error(`Login attempt ${attempts + 1} failed:`, error.message);
+    if (attempts < MAX_LOGIN_ATTEMPTS - 1) {
+      console.log(`Retrying in ${LOGIN_RETRY_DELAY / 1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, LOGIN_RETRY_DELAY));
+      return attemptLogin(attempts + 1);
+    } else {
+      console.error('Max login attempts reached. Unable to log in to iRacing API.');
+      return false;
+    }
+  }
+}
+
 const checkAuth = async (req, res, next) => {
   try {
     const isAuthenticated = await verifyAuth();
     if (isAuthenticated) {
       next();
     } else {
+      console.error('Authentication failed in checkAuth middleware');
       res.status(401).json({ error: 'Authentication failed' });
     }
   } catch (error) {
-    res.status(401).json({ error: 'Authentication failed' });
+    console.error('Error in checkAuth middleware:', error);
+    res.status(500).json({ error: 'Internal server error during authentication' });
   }
 };
 
-// Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' });
 });
@@ -74,17 +99,10 @@ app.get('/api/search-iracing-name', checkAuth, async (req, res) => {
   }
 });
 
-// Start the server
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
-  try {
-    const loginSuccess = await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
-    if (loginSuccess) {
-      console.log('Successfully logged in to iRacing API');
-    } else {
-      console.error('Failed to log in to iRacing API');
-    }
-  } catch (error) {
-    console.error('Error during iRacing API login:', error);
+  const loginSuccess = await attemptLogin();
+  if (!loginSuccess) {
+    console.error('Server started but iRacing login failed. Some functionality may be limited.');
   }
 });

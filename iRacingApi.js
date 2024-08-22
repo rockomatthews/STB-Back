@@ -38,10 +38,17 @@ async function login(email, password) {
       console.log('Cookies set:', await cookieJar.getCookies(BASE_URL));
       return true;
     } else {
+      console.error('No cookies in response');
+      console.log('Response headers:', response.headers);
+      console.log('Response data:', response.data);
       throw new Error('No cookies in response');
     }
   } catch (error) {
     console.error('Login failed:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     return false;
   }
 }
@@ -51,7 +58,7 @@ async function verifyAuth() {
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
     
-    console.log('Sending cookies:', cookieString);
+    console.log('Verifying auth with cookies:', cookieString);
 
     const response = await instance.get(`${BASE_URL}/data/doc`, {
       headers: {
@@ -65,7 +72,7 @@ async function verifyAuth() {
     console.error('Auth verification failed:', error.message);
     if (error.response) {
       console.error('Response status:', error.response.status);
-      console.error('Response headers:', error.response.headers);
+      console.error('Response data:', error.response.data);
     }
     return false;
   }
