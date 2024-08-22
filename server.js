@@ -54,11 +54,16 @@ app.get('/api/search-iracing-name', checkAuth, async (req, res) => {
       return res.status(400).json({ error: 'Name parameter is required' });
     }
 
-    console.log('Searching for:', name);  // Log the search term
+    console.log('Searching for:', name);
 
     const result = await searchIRacingName(name);
-    console.log('Search result:', result);  // Log the search result
-    res.json(result);
+    console.log('Search result:', result);
+
+    if (result.exists) {
+      res.json({ exists: true, name: result.name, id: result.id });
+    } else {
+      res.json({ exists: false, message: `${name} has not created an iRacing account yet.` });
+    }
   } catch (error) {
     console.error('Error in search-iracing-name endpoint:', error);
     res.status(500).json({ error: 'An error occurred while searching for the iRacing name' });

@@ -78,7 +78,7 @@ async function searchIRacingName(name) {
 
     const response = await instance.get(`${BASE_URL}/data/lookup/drivers`, {
       params: {
-        search_term: name,  // Changed from 'search' to 'search_term'
+        search_term: name,
         lowerbound: 1,
         upperbound: 25
       },
@@ -87,23 +87,26 @@ async function searchIRacingName(name) {
       }
     });
 
-    console.log('Search response:', response.data);  // Log the response for debugging
+    console.log('Search response:', response.data);
 
     if (response.data && response.data.link) {
       const driverDataResponse = await instance.get(response.data.link);
       const drivers = driverDataResponse.data.drivers;
 
+      console.log('Drivers found:', drivers);
+
       if (drivers && drivers.length > 0) {
-        // Return the first exact match, if found
-        const exactMatch = drivers.find(driver => 
-          driver.display_name.toLowerCase() === name.toLowerCase()
+        // Look for an exact match or a case-insensitive partial match
+        const matchingDriver = drivers.find(driver => 
+          driver.display_name.toLowerCase() === name.toLowerCase() ||
+          driver.display_name.toLowerCase().includes(name.toLowerCase())
         );
 
-        if (exactMatch) {
+        if (matchingDriver) {
           return {
             exists: true,
-            name: exactMatch.display_name,
-            id: exactMatch.cust_id
+            name: matchingDriver.display_name,
+            id: matchingDriver.cust_id
           };
         }
       }
