@@ -87,13 +87,15 @@ async function searchIRacingName(name) {
       }
     });
 
-    console.log('Search response:', response.data);
+    console.log('Initial search response:', JSON.stringify(response.data, null, 2));
 
     if (response.data && response.data.link) {
       const driverDataResponse = await instance.get(response.data.link);
-      const drivers = driverDataResponse.data.rows;  // Change this line
+      console.log('Driver data response:', JSON.stringify(driverDataResponse.data, null, 2));
 
-      console.log('Drivers found:', drivers);
+      const drivers = driverDataResponse.data.drivers || driverDataResponse.data.rows || [];
+
+      console.log('Drivers found:', JSON.stringify(drivers, null, 2));
 
       if (drivers && drivers.length > 0) {
         // Look for an exact match or a case-insensitive partial match
@@ -117,7 +119,7 @@ async function searchIRacingName(name) {
     console.error('Error searching for iRacing name:', error.message);
     if (error.response) {
       console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
+      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
     }
     throw error;
   }
