@@ -1,7 +1,7 @@
-const axios = require('axios');
-const crypto = require('crypto');
-const https = require('https');
-const tough = require('tough-cookie');
+import axios from 'axios';
+import crypto from 'crypto';
+import https from 'https';
+import tough from 'tough-cookie';
 const { CookieJar } = tough;
 
 const BASE_URL = 'https://members-ng.iracing.com';
@@ -112,8 +112,32 @@ async function searchIRacingName(name) {
   }
 }
 
-module.exports = {
+async function getOfficialRaces() {
+  try {
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    const response = await instance.get(`${BASE_URL}/data/series/seasons`, {
+      headers: {
+        'Cookie': cookieString
+      }
+    });
+
+    if (response.data && response.data.link) {
+      const racesDataResponse = await instance.get(response.data.link);
+      return racesDataResponse.data;
+    }
+
+    throw new Error('No race data available');
+  } catch (error) {
+    console.error('Error fetching official races:', error.message);
+    throw error;
+  }
+}
+
+export {
   login,
   verifyAuth,
-  searchIRacingName
+  searchIRacingName,
+  getOfficialRaces
 };
