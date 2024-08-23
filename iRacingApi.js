@@ -144,7 +144,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
 
     if (response.data && response.data.link) {
       const racesDataResponse = await instance.get(response.data.link);
-      const allRaces = racesDataResponse.data;
+      const allRaces = Array.isArray(racesDataResponse.data) ? racesDataResponse.data : [];
 
       // Filter for official races and sort by start time
       const officialRaces = allRaces
@@ -160,10 +160,10 @@ async function getOfficialRaces(page = 1, limit = 10) {
       const formattedRaces = paginatedRaces.map(race => ({
         id: race.season_id,
         name: race.series_name,
-        track: race.track ? race.track.track_name : 'Unknown Track',
+        track: race.track?.track_name || 'Unknown Track',
         start_time: race.start_time,
         duration: race.race_week_length,
-        car_class: race.car_class_name || 'Unknown Class',
+        car_class: race.car_class?.name || 'Unknown Class',
         license_level: race.license_group
       }));
 
@@ -175,7 +175,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
       };
     }
 
-    throw new Error('No race data available');
+    return { races: [], total: 0, page: page, limit: limit };
   } catch (error) {
     console.error('Error fetching official races:', error.message);
     throw error;
