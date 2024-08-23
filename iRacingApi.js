@@ -160,10 +160,10 @@ async function getOfficialRaces(page = 1, limit = 10) {
       const formattedRaces = paginatedRaces.map(race => ({
         id: race.season_id,
         name: race.series_name,
-        track: race.track.track_name,
+        track: race.track ? race.track.track_name : 'Unknown Track',
         start_time: race.start_time,
         duration: race.race_week_length,
-        car_class: race.car_class_name,
+        car_class: race.car_class_name || 'Unknown Class',
         license_level: race.license_group
       }));
 
