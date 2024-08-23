@@ -148,7 +148,10 @@ async function searchIRacingName(name) {
 
 async function getOfficialRaces(page = 1, limit = 10) {
   try {
+    console.log(`Getting official races: page ${page}, limit ${limit}`);
+    
     // Check if we have recent data in Supabase
+    console.log('Checking Supabase for cached races');
     const { data: cachedRaces, error: cacheError } = await supabase
       .from('official_races')
       .select('*')
@@ -161,6 +164,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
     }
 
     if (cachedRaces && cachedRaces.length > 0) {
+      console.log(`Found ${cachedRaces.length} cached races`);
       // Check if the cached data is recent (e.g., less than 5 minutes old)
       const mostRecentUpdate = new Date(Math.max(...cachedRaces.map(race => new Date(race.updated_at))));
       if (new Date() - mostRecentUpdate < 5 * 60 * 1000) {
@@ -177,8 +181,10 @@ async function getOfficialRaces(page = 1, limit = 10) {
     console.log('Fetching fresh race data from iRacing API');
     // If no recent data in cache, fetch from iRacing API
     const races = await fetchRacesFromIRacingAPI();
+    console.log(`Fetched ${races.length} races from iRacing API`);
 
     // Update Supabase with new data
+    console.log('Updating Supabase with new race data');
     const { error: upsertError } = await supabase
       .from('official_races')
       .upsert(races, { onConflict: 'id' });
@@ -190,6 +196,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
 
     // Return paginated results
     const paginatedRaces = races.slice((page - 1) * limit, page * limit);
+    console.log(`Returning ${paginatedRaces.length} races`);
 
     return {
       races: paginatedRaces,
@@ -199,6 +206,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
     };
   } catch (error) {
     console.error('Error in getOfficialRaces:', error.message);
+    console.error('Error stack:', error.stack);
     throw error;
   }
 }

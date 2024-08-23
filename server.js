@@ -45,6 +45,17 @@ async function attemptLogin(attempts = 0) {
   }
 }
 
+app.get('/api/test-supabase', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('official_races').select('count').limit(1);
+    if (error) throw error;
+    res.json({ success: true, message: 'Supabase connection successful', data });
+  } catch (error) {
+    console.error('Supabase connection test failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 const checkAuth = async (req, res, next) => {
   try {
     const isAuthenticated = await verifyAuth();
@@ -90,13 +101,17 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
 
+    console.log(`Fetching official races: page ${page}, limit ${limit}`);
     const races = await getOfficialRaces(page, limit);
+    console.log(`Successfully fetched ${races.races.length} races`);
     res.json(races);
   } catch (error) {
     console.error('Error fetching official races:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({ 
       error: 'An error occurred while fetching official races', 
-      details: error.message
+      details: error.message,
+      stack: error.stack
     });
   }
 });
