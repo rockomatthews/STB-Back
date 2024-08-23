@@ -100,13 +100,11 @@ async function searchIRacingName(name) {
       const driverDataResponse = await instance.get(response.data.link);
       console.log('Driver data response:', JSON.stringify(driverDataResponse.data, null, 2));
 
-      // The driver data is directly in the response, not in a 'drivers' or 'rows' property
       const drivers = Array.isArray(driverDataResponse.data) ? driverDataResponse.data : [];
 
       console.log('Drivers found:', JSON.stringify(drivers, null, 2));
 
       if (drivers.length > 0) {
-        // Look for an exact match or a case-insensitive partial match
         const matchingDriver = drivers.find(driver => 
           driver.display_name.toLowerCase() === name.toLowerCase() ||
           driver.display_name.toLowerCase().includes(name.toLowerCase())
@@ -133,7 +131,7 @@ async function searchIRacingName(name) {
   }
 }
 
-async function getOfficialRaces() {
+async function getOfficialRaces(page = 1, limit = 10) {
   try {
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
@@ -146,7 +144,35 @@ async function getOfficialRaces() {
 
     if (response.data && response.data.link) {
       const racesDataResponse = await instance.get(response.data.link);
-      return racesDataResponse.data;
+      const allRaces = racesDataResponse.data;
+
+      // Filter for official races and sort by start time
+      const officialRaces = allRaces
+        .filter(race => race.official)
+        .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+      // Implement pagination
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedRaces = officialRaces.slice(startIndex, endIndex);
+
+      // Format the race data
+      const formattedRaces = paginatedRaces.map(race => ({
+        id: race.season_id,
+        name: race.series_name,
+        track: race.track.track_name,
+        start_time: race.start_time,
+        duration: race.race_week_length,
+        car_class: race.car_class_name,
+        license_level: race.license_group
+      }));
+
+      return {
+        races: formattedRaces,
+        total: officialRaces.length,
+        page: page,
+        limit: limit
+      };
     }
 
     throw new Error('No race data available');

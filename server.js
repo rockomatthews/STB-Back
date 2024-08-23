@@ -65,10 +65,17 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/official-races', checkAuth, async (req, res) => {
   try {
-    const races = await getOfficialRaces();
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const races = await getOfficialRaces(page, limit);
     res.json(races);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error fetching official races:', error);
+    res.status(500).json({ 
+      error: 'An error occurred while fetching official races', 
+      details: error.message
+    });
   }
 });
 
