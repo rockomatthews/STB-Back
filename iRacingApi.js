@@ -2,6 +2,8 @@ import axios from 'axios';
 import crypto from 'crypto';
 import https from 'https';
 import tough from 'tough-cookie';
+import { createClient } from '@supabase/supabase-js';
+
 const { CookieJar } = tough;
 
 const BASE_URL = 'https://members-ng.iracing.com';
@@ -12,6 +14,8 @@ const instance = axios.create({
     rejectUnauthorized: false
   })
 });
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
 function hashPassword(password, email) {
   const hash = crypto.createHash('sha256');
@@ -133,51 +137,130 @@ async function searchIRacingName(name) {
 
 async function getOfficialRaces(page = 1, limit = 10) {
   try {
+    // Check if we have recent data in Supabase
+    const { data: cachedRaces, error: cacheError } = await supabase
+      .from('official_races')
+      .select('*')
+      .order('start_time', { ascending: true })
+      .range((page - 1) * limit, page * limit - 1);
+
+    if (cacheError) {
+      console.error('Error fetching cached races from Supabase:', cacheError);
+      throw cacheError;
+    }
+
+    if (cachedRaces && cachedRaces.length > 0) {
+      // Check if the cached data is recent (e.g., less than 5 minutes old)
+      const mostRecentUpdate = new Date(Math.max(...cachedRaces.map(race => new Date(race.updated_at))));
+      if (new Date() - mostRecentUpdate < 5 * 60 * 1000) {
+        console.log('Returning cached race data from Supabase');
+        return {
+          races: cachedRaces,
+          total: await getTotalRacesCount(),
+          page: page,
+          limit: limit
+        };
+      }
+    }
+
+    console.log('Fetching fresh race data from iRacing API');
+    // If no recent data in cache, fetch from iRacing API
+    const races = await fetchRacesFromIRacingAPI();
+
+    // Update Supabase with new data
+    const { error: upsertError } = await supabase
+      .from('official_races')
+      .upsert(races, { onConflict: 'id' });
+
+    if (upsertError) {
+      console.error('Error upserting races to Supabase:', upsertError);
+      throw upsertError;
+    }
+
+    // Return paginated results
+    const paginatedRaces = races.slice((page - 1) * limit, page * limit);
+
+    return {
+      races: paginatedRaces,
+      total: races.length,
+      page: page,
+      limit: limit
+    };
+  } catch (error) {
+    console.error('Error in getOfficialRaces:', error.message);
+    throw error;
+  }
+}
+
+async function getTotalRacesCount() {
+  const { count, error } = await supabase
+    .from('official_races')
+    .select('*', { count: 'exact', head: true });
+
+  if (error) {
+    console.error('Error getting total race count from Supabase:', error);
+    throw error;
+  }
+  return count;
+}
+
+async function fetchRacesFromIRacingAPI() {
+  try {
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
-    const response = await instance.get(`${BASE_URL}/data/series/seasons`, {
+    // First, get the current seasons
+    const seasonsResponse = await instance.get(`${BASE_URL}/data/series/seasons`, {
       headers: {
         'Cookie': cookieString
       }
     });
 
-    if (response.data && response.data.link) {
-      const racesDataResponse = await instance.get(response.data.link);
-      const allRaces = Array.isArray(racesDataResponse.data) ? racesDataResponse.data : [];
-
-      // Filter for official races and sort by start time
-      const officialRaces = allRaces
-        .filter(race => race.official)
-        .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-
-      // Implement pagination
-      const startIndex = (page - 1) * limit;
-      const endIndex = startIndex + limit;
-      const paginatedRaces = officialRaces.slice(startIndex, endIndex);
-
-      // Format the race data
-      const formattedRaces = paginatedRaces.map(race => ({
-        id: race.season_id,
-        name: race.series_name,
-        track: race.track?.track_name || 'Unknown Track',
-        start_time: race.start_time,
-        duration: race.race_week_length,
-        car_class: race.car_class?.name || 'Unknown Class',
-        license_level: race.license_group
-      }));
-
-      return {
-        races: formattedRaces,
-        total: officialRaces.length,
-        page: page,
-        limit: limit
-      };
+    if (!seasonsResponse.data || !seasonsResponse.data.link) {
+      throw new Error('Invalid seasons response from iRacing API');
     }
 
-    return { races: [], total: 0, page: page, limit: limit };
+    const seasonsDataResponse = await instance.get(seasonsResponse.data.link);
+    const currentSeasons = seasonsDataResponse.data;
+
+    // Then, get the race guide
+    const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
+      headers: {
+        'Cookie': cookieString
+      }
+    });
+
+    if (!raceGuideResponse.data || !raceGuideResponse.data.link) {
+      throw new Error('Invalid race guide response from iRacing API');
+    }
+
+    const raceGuideDataResponse = await instance.get(raceGuideResponse.data.link);
+    const raceGuide = raceGuideDataResponse.data;
+
+    // Filter for official races and combine with season data
+    const officialRaces = raceGuide.sessions
+      .filter(session => session.licenselevel !== null) // Assuming null license level means unofficial
+      .map(session => {
+        const seasonInfo = currentSeasons.find(season => season.season_id === session.season_id);
+        return {
+          id: session.subsession_id,
+          name: seasonInfo ? seasonInfo.series_name : 'Unknown Series',
+          track: session.track.track_name,
+          start_time: session.start_time,
+          duration: session.race_lap_limit ? `${session.race_lap_limit} laps` : `${session.race_time_limit} minutes`,
+          license_level: session.licenselevel,
+          car_class: session.car_class_id,
+          current_drivers: session.num_drivers,
+          max_drivers: session.max_drivers,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      })
+      .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+    return officialRaces;
   } catch (error) {
-    console.error('Error fetching official races:', error.message);
+    console.error('Error fetching races from iRacing API:', error.message);
     throw error;
   }
 }
