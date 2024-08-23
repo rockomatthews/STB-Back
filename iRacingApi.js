@@ -228,7 +228,7 @@ async function fetchRacesFromIRacingAPI() {
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
-    // First, get the current seasons
+    console.log('Fetching seasons data from iRacing API');
     const seasonsResponse = await instance.get(`${BASE_URL}/data/series/seasons`, {
       headers: {
         'Cookie': cookieString
@@ -239,10 +239,11 @@ async function fetchRacesFromIRacingAPI() {
       throw new Error('Invalid seasons response from iRacing API');
     }
 
+    console.log('Fetching detailed seasons data');
     const seasonsDataResponse = await instance.get(seasonsResponse.data.link);
     const currentSeasons = seasonsDataResponse.data;
 
-    // Then, get the race guide
+    console.log('Fetching race guide data from iRacing API');
     const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
       headers: {
         'Cookie': cookieString
@@ -253,18 +254,20 @@ async function fetchRacesFromIRacingAPI() {
       throw new Error('Invalid race guide response from iRacing API');
     }
 
+    console.log('Fetching detailed race guide data');
     const raceGuideDataResponse = await instance.get(raceGuideResponse.data.link);
     const raceGuide = raceGuideDataResponse.data;
 
-    // Filter for official races and combine with season data
+    console.log('Processing race data');
     const officialRaces = raceGuide.sessions
-      .filter(session => session.licenselevel !== null) // Assuming null license level means unofficial
+      .filter(session => session.licenselevel !== null)
       .map(session => {
         const seasonInfo = currentSeasons.find(season => season.season_id === session.season_id);
+        console.log('Processing session:', JSON.stringify(session, null, 2));
         return {
           id: session.subsession_id,
           name: seasonInfo ? seasonInfo.series_name : 'Unknown Series',
-          track: session.track.track_name,
+          track: session.track ? session.track.track_name : 'Unknown Track',
           start_time: session.start_time,
           duration: session.race_lap_limit ? `${session.race_lap_limit} laps` : `${session.race_time_limit} minutes`,
           license_level: session.licenselevel,
@@ -277,9 +280,11 @@ async function fetchRacesFromIRacingAPI() {
       })
       .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
 
+    console.log(`Processed ${officialRaces.length} official races`);
     return officialRaces;
   } catch (error) {
     console.error('Error fetching races from iRacing API:', error.message);
+    console.error('Error stack:', error.stack);
     throw error;
   }
 }
