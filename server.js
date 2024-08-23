@@ -12,7 +12,8 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.speedtrapbets.com'
 app.use(cors({
   origin: FRONTEND_URL,
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 
 app.use(express.json());
@@ -61,6 +62,27 @@ const checkAuth = async (req, res, next) => {
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' });
+});
+
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    const loginSuccess = await login(email, password);
+    if (loginSuccess) {
+      res.json({ success: true, message: 'Login successful' });
+    } else {
+      res.status(401).json({ success: false, message: 'Login failed' });
+    }
+  } catch (error) {
+    console.error('Error in login endpoint:', error);
+    res.status(500).json({ 
+      error: 'An error occurred during login', 
+      details: error.message
+    });
+  }
 });
 
 app.get('/api/official-races', checkAuth, async (req, res) => {

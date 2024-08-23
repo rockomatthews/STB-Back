@@ -3,6 +3,9 @@ import crypto from 'crypto';
 import https from 'https';
 import tough from 'tough-cookie';
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const { CookieJar } = tough;
 
@@ -15,7 +18,15 @@ const instance = axios.create({
   })
 });
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Supabase URL or Anon Key is not set in environment variables');
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 function hashPassword(password, email) {
   const hash = crypto.createHash('sha256');
