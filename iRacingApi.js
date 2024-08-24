@@ -179,28 +179,34 @@ async function getOfficialRaces(page = 1, limit = 10) {
     }
 
     console.log('Fetching fresh race data from iRacing API');
-    // If no recent data in cache, fetch from iRacing API
     const races = await fetchRacesFromIRacingAPI();
-    console.log(`Fetched ${races.length} races from iRacing API`);
 
-    // Update Supabase with new data
     console.log('Updating Supabase with new race data');
-    const { error: upsertError } = await supabase
-      .from('official_races')
-      .upsert(races, { onConflict: 'id' });
+    for (const race of races) {
+      const { error } = await supabase
+        .from('official_races')
+        .upsert(race, { onConflict: 'id' });
 
-    if (upsertError) {
-      console.error('Error upserting races to Supabase:', upsertError);
-      throw upsertError;
+      if (error) {
+        console.error('Error upserting race:', error);
+        console.error('Problematic race data:', race);
+      }
     }
 
-    // Return paginated results
-    const paginatedRaces = races.slice((page - 1) * limit, page * limit);
-    console.log(`Returning ${paginatedRaces.length} races`);
+    // Fetch paginated results from Supabase
+    const { data: paginatedRaces, error: fetchError, count } = await supabase
+      .from('official_races')
+      .select('*', { count: 'exact' })
+      .order('start_time', { ascending: true })
+      .range((page - 1) * limit, page * limit - 1);
+
+    if (fetchError) {
+      throw fetchError;
+    }
 
     return {
       races: paginatedRaces,
-      total: races.length,
+      total: count,
       page: page,
       limit: limit
     };
@@ -265,15 +271,20 @@ async function fetchRacesFromIRacingAPI() {
         const seasonInfo = currentSeasons.find(season => season.season_id === session.season_id);
         console.log('Processing session:', JSON.stringify(session, null, 2));
         return {
-          id: session.subsession_id,
+          id: session.subsession_id || session.session_id,
+          season_id: session.season_id,
+          series_id: session.series_id,
+          race_week_num: session.race_week_num,
+          session_id: session.session_id,
+          super_session: session.super_session,
+          entry_count: session.entry_count,
           name: seasonInfo ? seasonInfo.series_name : 'Unknown Series',
-          track: session.track ? session.track.track_name : 'Unknown Track',
           start_time: session.start_time,
-          duration: session.race_lap_limit ? `${session.race_lap_limit} laps` : `${session.race_time_limit} minutes`,
+          end_time: session.end_time,
+          duration: session.end_time ? 
+            (new Date(session.end_time) - new Date(session.start_time)) / 60000 + ' minutes' : 
+            'Unknown duration',
           license_level: session.licenselevel,
-          car_class: session.car_class_id,
-          current_drivers: session.num_drivers,
-          max_drivers: session.max_drivers,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
