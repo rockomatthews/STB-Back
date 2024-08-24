@@ -150,36 +150,8 @@ async function getOfficialRaces(page = 1, limit = 10) {
   try {
     console.log(`Getting official races: page ${page}, limit ${limit}`);
     
-    // Check if we have recent data in Supabase
-    console.log('Checking Supabase for cached races');
-    const { data: cachedRaces, error: cacheError } = await supabase
-      .from('official_races')
-      .select('*')
-      .order('start_time', { ascending: true })
-      .range((page - 1) * limit, page * limit - 1);
-
-    if (cacheError) {
-      console.error('Error fetching cached races from Supabase:', cacheError);
-      throw cacheError;
-    }
-
-    if (cachedRaces && cachedRaces.length > 0) {
-      console.log(`Found ${cachedRaces.length} cached races`);
-      // Check if the cached data is recent (e.g., less than 5 minutes old)
-      const mostRecentUpdate = new Date(Math.max(...cachedRaces.map(race => new Date(race.updated_at))));
-      if (new Date() - mostRecentUpdate < 5 * 60 * 1000) {
-        console.log('Returning cached race data from Supabase');
-        return {
-          races: cachedRaces,
-          total: await getTotalRacesCount(),
-          page: page,
-          limit: limit
-        };
-      }
-    }
-
-    console.log('Fetching fresh race data from iRacing API');
     const races = await fetchRacesFromIRacingAPI();
+    console.log(`Fetched ${races.length} races from iRacing API`);
 
     console.log('Updating Supabase with new race data');
     for (const race of races) {
@@ -194,11 +166,13 @@ async function getOfficialRaces(page = 1, limit = 10) {
     }
 
     // Fetch paginated results from Supabase
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit - 1;
     const { data: paginatedRaces, error: fetchError, count } = await supabase
       .from('official_races')
       .select('*', { count: 'exact' })
       .order('start_time', { ascending: true })
-      .range((page - 1) * limit, page * limit - 1);
+      .range(startIndex, endIndex);
 
     if (fetchError) {
       throw fetchError;
@@ -271,24 +245,25 @@ async function fetchRacesFromIRacingAPI() {
         const seasonInfo = currentSeasons.find(season => season.season_id === session.season_id);
         console.log('Processing session:', JSON.stringify(session, null, 2));
         return {
-          id: session.subsession_id || session.session_id,
-          season_id: session.season_id,
-          series_id: session.series_id,
-          race_week_num: session.race_week_num,
-          session_id: session.session_id,
-          super_session: session.super_session,
-          entry_count: session.entry_count,
-          name: seasonInfo ? seasonInfo.series_name : 'Unknown Series',
-          start_time: session.start_time,
-          end_time: session.end_time,
-          duration: session.end_time ? 
-            (new Date(session.end_time) - new Date(session.start_time)) / 60000 + ' minutes' : 
+          id: session.subsession_id || session.session_id || `temp-${Date.now()}-${Math.random()}`,
+          season_id: session.season_id || null,
+          series_id: session.series_id || null,
+          race_week_num: session.race_week_num || null,
+          session_id: session.session_id || null,
+          super_session: session.super_session || false,
+          entry_count: session.entry_count || 0,
+          name: (seasonInfo && seasonInfo.series_name) || 'Unknown Series',
+          start_time: session.start_time || null,
+          end_time: session.end_time || null,
+          duration: session.end_time && session.start_time ? 
+            `${(new Date(session.end_time) - new Date(session.start_time)) / 60000} minutes` : 
             'Unknown duration',
-          license_level: session.licenselevel,
+          license_level: session.licenselevel || null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
       })
+      .filter(race => race.id && race.start_time) // Ensure we only keep races with valid IDs and start times
       .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
 
     console.log(`Processed ${officialRaces.length} official races`);
