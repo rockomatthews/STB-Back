@@ -265,82 +265,6 @@ async function fetchRacesFromIRacingAPI() {
   }
 }
 
-async function getTotalRacesCount() {
-  const { count, error } = await supabase
-    .from('official_races')
-    .select('*', { count: 'exact', head: true });
-
-  if (error) {
-    console.error('Error getting total race count from Supabase:', error);
-    throw error;
-  }
-  return count;
-}
-
-async function fetchRacesFromIRacingAPI() {
-  try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
-
-    console.log('Fetching series seasons data from iRacing API');
-    const seasonsResponse = await instance.get(`${BASE_URL}/data/series/seasons`, {
-      params: { include_series: true },
-      headers: { 'Cookie': cookieString }
-    });
-
-    if (!seasonsResponse.data || !seasonsResponse.data.link) {
-      throw new Error('Invalid seasons response from iRacing API');
-    }
-
-    const seasonsDataResponse = await instance.get(seasonsResponse.data.link);
-    const seriesSeasons = seasonsDataResponse.data;
-
-    console.log('Fetching race guide data from iRacing API');
-    const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
-      headers: { 'Cookie': cookieString }
-    });
-
-    if (!raceGuideResponse.data || !raceGuideResponse.data.link) {
-      throw new Error('Invalid race guide response from iRacing API');
-    }
-
-    const raceGuideDataResponse = await instance.get(raceGuideResponse.data.link);
-    const raceGuide = raceGuideDataResponse.data;
-
-    console.log('Processing race data');
-    const officialRaces = raceGuide.sessions
-      .filter(session => session.license_group !== null) // Official races have a license group
-      .map(session => {
-        const seriesSeason = seriesSeasons.find(season => season.season_id === session.season_id);
-        console.log('Processing session:', JSON.stringify(session, null, 2)); // Log each session for debugging
-        return {
-          id: session.subsession_id,
-          season_id: session.season_id,
-          series_id: seriesSeason ? seriesSeason.series_id : null,
-          race_week_num: session.race_week_num,
-          session_id: session.session_id,
-          license_group: session.license_group,
-          name: seriesSeason ? seriesSeason.series_name : 'Unknown Series',
-          start_time: session.start_time,
-          end_time: calculateEndTime(session),
-          track_name: session.track ? session.track.track_name : 'Unknown Track',
-          category_id: seriesSeason ? seriesSeason.category_id : null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-      })
-      .filter(race => race.id && race.start_time)
-      .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-
-    console.log(`Processed ${officialRaces.length} official races`);
-    return officialRaces;
-  } catch (error) {
-    console.error('Error fetching races from iRacing API:', error.message);
-    console.error('Error stack:', error.stack);
-    throw error;
-  }
-}
-
 function calculateEndTime(session) {
   if (session.end_time) return session.end_time;
   
@@ -354,6 +278,18 @@ function calculateEndTime(session) {
   }
   
   return new Date(startTime.getTime() + duration * 60000).toISOString();
+}
+
+async function getTotalRacesCount() {
+  const { count, error } = await supabase
+    .from('official_races')
+    .select('*', { count: 'exact', head: true });
+
+  if (error) {
+    console.error('Error getting total race count from Supabase:', error);
+    throw error;
+  }
+  return count;
 }
 
 export {
