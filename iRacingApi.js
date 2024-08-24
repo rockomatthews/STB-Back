@@ -153,6 +153,16 @@ async function getOfficialRaces(page = 1, limit = 10) {
     const races = await fetchRacesFromIRacingAPI();
     console.log(`Fetched ${races.length} races from iRacing API`);
 
+    if (races.length === 0) {
+      console.log('No races fetched from iRacing API');
+      return {
+        races: [],
+        total: 0,
+        page: page,
+        limit: limit
+      };
+    }
+
     console.log('Updating Supabase with new race data');
     const { error } = await supabase
       .from('official_races')
@@ -160,6 +170,8 @@ async function getOfficialRaces(page = 1, limit = 10) {
 
     if (error) {
       console.error('Error upserting races:', error);
+    } else {
+      console.log(`Successfully upserted ${races.length} races to Supabase`);
     }
 
     // Fetch paginated results from Supabase
@@ -170,8 +182,11 @@ async function getOfficialRaces(page = 1, limit = 10) {
       .range((page - 1) * limit, page * limit - 1);
 
     if (fetchError) {
+      console.error('Error fetching paginated races from Supabase:', fetchError);
       throw fetchError;
     }
+
+    console.log(`Returning ${paginatedRaces ? paginatedRaces.length : 0} races, total count: ${count || 0}`);
 
     return {
       races: paginatedRaces || [],
@@ -233,6 +248,7 @@ async function fetchRacesFromIRacingAPI() {
       .filter(session => session.license_group !== null) // Official races have a license group
       .map(session => {
         const seriesSeason = seriesSeasons.find(season => season.season_id === session.season_id);
+        console.log('Processing session:', JSON.stringify(session, null, 2)); // Log each session for debugging
         return {
           id: session.subsession_id,
           season_id: session.season_id,
@@ -243,7 +259,7 @@ async function fetchRacesFromIRacingAPI() {
           name: seriesSeason ? seriesSeason.series_name : 'Unknown Series',
           start_time: session.start_time,
           end_time: calculateEndTime(session),
-          track_name: session.track.track_name,
+          track_name: session.track ? session.track.track_name : 'Unknown Track',
           category_id: seriesSeason ? seriesSeason.category_id : null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
