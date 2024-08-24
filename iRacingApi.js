@@ -150,6 +150,9 @@ async function getOfficialRaces(page = 1, limit = 10) {
   try {
     console.log(`Getting official races: page ${page}, limit ${limit}`);
     
+    // Ensure page is at least 1
+    page = Math.max(1, page);
+
     // Fetch races from Supabase
     const { data: races, error: fetchError, count } = await supabase
       .from('official_races')
@@ -165,7 +168,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
     console.log(`Fetched ${races ? races.length : 0} races, total count: ${count || 0}`);
 
     // If there are no races in Supabase or it's the first page, fetch from iRacing API
-    if ((races && races.length === 0) || page === 1) {
+    if ((count === 0 || page === 1) && races.length === 0) {
       console.log('Fetching fresh race data from iRacing API');
       const freshRaces = await fetchRacesFromIRacingAPI();
       
@@ -191,7 +194,12 @@ async function getOfficialRaces(page = 1, limit = 10) {
         if (refetchError) {
           console.error('Error refetching races after upsert:', refetchError);
         } else {
-          races = updatedRaces;
+          return {
+            races: updatedRaces,
+            total: freshRaces.length,
+            page: 1,
+            limit: limit
+          };
         }
       }
     }
