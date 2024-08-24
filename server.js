@@ -104,6 +104,7 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
     console.log(`Fetching official races: page ${page}, limit ${limit}`);
     const races = await getOfficialRaces(page, limit);
     console.log(`Successfully fetched ${races.races.length} races`);
+    console.log('Race data:', JSON.stringify(races, null, 2));
     res.json(races);
   } catch (error) {
     console.error('Error fetching official races:', error);
