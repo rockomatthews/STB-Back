@@ -150,46 +150,54 @@ async function getOfficialRaces(page = 1, limit = 10) {
   try {
     console.log(`Getting official races: page ${page}, limit ${limit}`);
     
-    const races = await fetchRacesFromIRacingAPI();
-    console.log(`Fetched ${races.length} races from iRacing API`);
-
-    if (races.length === 0) {
-      console.log('No races fetched from iRacing API');
-      return {
-        races: [],
-        total: 0,
-        page: page,
-        limit: limit
-      };
-    }
-
-    console.log('Updating Supabase with new race data');
-    const { error } = await supabase
-      .from('official_races')
-      .upsert(races, { onConflict: 'id' });
-
-    if (error) {
-      console.error('Error upserting races:', error);
-    } else {
-      console.log(`Successfully upserted ${races.length} races to Supabase`);
-    }
-
-    // Fetch paginated results from Supabase
-    const { data: paginatedRaces, error: fetchError, count } = await supabase
+    // Fetch races from Supabase
+    const { data: races, error: fetchError, count } = await supabase
       .from('official_races')
       .select('*', { count: 'exact' })
-      .order('start_time', { ascending: true })
+      .order('start_time', { ascending: false }) // Most recent races first
       .range((page - 1) * limit, page * limit - 1);
 
     if (fetchError) {
-      console.error('Error fetching paginated races from Supabase:', fetchError);
+      console.error('Error fetching races from Supabase:', fetchError);
       throw fetchError;
     }
 
-    console.log(`Returning ${paginatedRaces ? paginatedRaces.length : 0} races, total count: ${count || 0}`);
+    console.log(`Fetched ${races ? races.length : 0} races, total count: ${count || 0}`);
+
+    // If there are no races in Supabase or it's the first page, fetch from iRacing API
+    if ((races && races.length === 0) || page === 1) {
+      console.log('Fetching fresh race data from iRacing API');
+      const freshRaces = await fetchRacesFromIRacingAPI();
+      
+      if (freshRaces.length > 0) {
+        console.log('Updating Supabase with new race data');
+        const { error: upsertError } = await supabase
+          .from('official_races')
+          .upsert(freshRaces, { onConflict: 'id' });
+
+        if (upsertError) {
+          console.error('Error upserting races:', upsertError);
+        } else {
+          console.log(`Successfully upserted ${freshRaces.length} races to Supabase`);
+        }
+
+        // Fetch the updated races from Supabase
+        const { data: updatedRaces, error: refetchError } = await supabase
+          .from('official_races')
+          .select('*')
+          .order('start_time', { ascending: false })
+          .range(0, limit - 1);
+
+        if (refetchError) {
+          console.error('Error refetching races after upsert:', refetchError);
+        } else {
+          races = updatedRaces;
+        }
+      }
+    }
 
     return {
-      races: paginatedRaces || [],
+      races: races || [],
       total: count || 0,
       page: page,
       limit: limit
