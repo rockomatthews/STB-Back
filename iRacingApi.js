@@ -1,160 +1,211 @@
-import axios from 'axios';
-import https from 'https';
-import tough from 'tough-cookie';
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import axios from 'axios'; // Import the Axios library to make HTTP requests
+import crypto from 'crypto'; // Import the Crypto library for password hashing
+import https from 'https'; // Import HTTPS module to manage SSL settings
+import tough from 'tough-cookie'; // Import tough-cookie to manage cookies
+import { createClient } from '@supabase/supabase-js'; // Import Supabase client to interact with the database
+import dotenv from 'dotenv'; // Import dotenv to load environment variables
 
-// Load environment variables from the .env file
+// Load environment variables from a .env file into process.env
 dotenv.config();
 
-// Destructure tough's CookieJar class to manage cookies for axios requests
+// Import the CookieJar class from tough-cookie, which allows us to manage and store cookies
 const { CookieJar } = tough;
 
-// Define the base URL for iRacing's API
+// Define the base URL for the iRacing API
 const BASE_URL = 'https://members-ng.iracing.com';
 
-// Instantiate a new CookieJar to store and manage cookies
+// Create a new instance of a cookie jar to store cookies from the iRacing API
 const cookieJar = new CookieJar();
 
-// Create an axios instance with custom configurations
-// The httpsAgent allows self-signed certificates, avoiding SSL errors
+// Create an Axios instance with specific configuration
+// This instance will be used to make HTTP requests to the iRacing API
 const instance = axios.create({
-  httpsAgent: new https.Agent({
-    rejectUnauthorized: false
+  httpsAgent: new https.Agent({  
+    rejectUnauthorized: false // Disable SSL certificate validation (not recommended for production)
   })
 });
 
-// Retrieve Supabase URL and Anon Key from environment variables
-// These are essential for interacting with the Supabase database
+// Initialize Supabase client using the environment variables for URL and Anon Key
+// Supabase is used for managing the database where race data is stored
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
-// Ensure that both the Supabase URL and Anon Key are present
-// If not, throw an error to prevent further execution
+// Check if the necessary environment variables for Supabase are set
+// If not, throw an error to prevent the application from running with incorrect configuration
 if (!supabaseUrl || !supabaseKey) {
   throw new Error('Supabase URL or Anon Key is not set in environment variables');
 }
 
-// Initialize the Supabase client using the URL and Key from the environment
+// Create a Supabase client instance
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
- * Logs in to iRacing by sending a POST request to the auth endpoint.
- * If successful, the response contains cookies that are stored in the CookieJar.
+ * This function hashes a password combined with the user's email using the SHA-256 algorithm.
+ * The result is then encoded in Base64. This is required for authentication with the iRacing API.
  * 
- * @param {string} email - The user's email.
  * @param {string} password - The user's password.
- * @returns {boolean} - Returns true if login was successful, otherwise false.
+ * @param {string} email - The user's email.
+ * @returns {string} - The Base64 encoded hash of the password and email.
+ */
+function hashPassword(password, email) {
+  const hash = crypto.createHash('sha256'); // Create a SHA-256 hash object
+  hash.update(password + email.toLowerCase()); // Update the hash with the password and email
+  return hash.digest('base64'); // Return the Base64 encoded hash
+}
+
+/**
+ * This function handles the login process to the iRacing API.
+ * It hashes the password using the hashPassword function and then sends a POST request to the iRacing API.
+ * If the login is successful, the cookies received from the API are stored in the cookie jar.
+ * 
+ * @param {string} email - The user's email address for iRacing.
+ * @param {string} password - The user's password for iRacing.
+ * @returns {boolean} - Returns true if the login is successful, false otherwise.
  */
 async function login(email, password) {
+  // Hash the password with the user's email
+  const hashedPassword = hashPassword(password, email);
+
   try {
-    // Send a POST request to iRacing's auth endpoint with the user's credentials
+    // Send a POST request to the iRacing API to authenticate the user
     const response = await instance.post(`${BASE_URL}/auth`, {
       email,
-      password
+      password: hashedPassword
     }, {
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json' // Set the content type to JSON
       }
     });
 
-    // If the response contains cookies, store them in the CookieJar
+    // Check if the response contains cookies
     if (response.headers['set-cookie']) {
+      // If cookies are present, store them in the cookie jar
       response.headers['set-cookie'].forEach(cookie => {
         cookieJar.setCookieSync(cookie, BASE_URL);
       });
       console.log('Cookies set:', await cookieJar.getCookies(BASE_URL));
-      return true;
+      return true; // Return true indicating successful login
     } else {
+      // If no cookies are found in the response, log the headers and data for debugging
       console.error('No cookies in response');
-      throw new Error('No cookies in response');
+      console.log('Response headers:', response.headers);
+      console.log('Response data:', response.data);
+      throw new Error('No cookies in response'); // Throw an error for missing cookies
     }
   } catch (error) {
+    // Log any errors that occur during the login process
     console.error('Login failed:', error.message);
-    return false;
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
+    return false; // Return false indicating failed login
   }
 }
 
 /**
- * Fetches race data from the iRacing API's race guide endpoint.
- * The data is processed and returned as an array of race objects.
+ * This function calculates the custom state for a race based on the start time.
  * 
- * @returns {Array} - Returns an array of processed race objects.
+ * @param {Date} raceStartTime - The start time of the race.
+ * @returns {string} - The state of the race ('Scheduled', 'Practice', 'Qualifying', 'Racing').
+ */
+function calculateRaceState(raceStartTime) {
+  const currentTime = new Date();
+  const timeDifference = raceStartTime - currentTime;
+
+  if (timeDifference <= 0) {
+    return 'Racing'; // Race has started
+  } else if (timeDifference <= 15 * 60 * 1000) {
+    return 'Qualifying'; // Within 15 minutes of the start time
+  } else if (timeDifference <= 45 * 60 * 1000) {
+    return 'Practice'; // Between 45 and 15 minutes before the start time
+  } else {
+    return 'Scheduled'; // More than 45 minutes before the start time
+  }
+}
+
+/**
+ * This function fetches race data from the iRacing API, processes it, and returns a list of official races.
+ * It performs an API call to retrieve race guide data, and then filters and processes the data.
+ * 
+ * @returns {Array<Object>} - Returns an array of official race objects with only the required fields.
  */
 async function fetchRacesFromIRacingAPI() {
   try {
-    // Get cookies from the CookieJar to authenticate the request
+    // Retrieve cookies from the cookie jar
     const cookies = await cookieJar.getCookies(BASE_URL);
+    // Convert the cookies into a string format suitable for the Cookie header
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
-    // Fetch race guide data from iRacing's API
     console.log('Fetching race guide data from iRacing API');
+    // Fetch race guide data from the iRacing API
     const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
-      headers: { 'Cookie': cookieString }
+      headers: { 'Cookie': cookieString } // Include cookies in the request
     });
 
-    // Validate the response and extract the data link
+    // Log the response data for debugging purposes
+    console.log('Race guide response:', JSON.stringify(raceGuideResponse.data, null, 2));
+
+    // Check if the response contains a valid link for further data retrieval
     if (!raceGuideResponse.data || !raceGuideResponse.data.link) {
       throw new Error('Invalid race guide response from iRacing API');
     }
 
-    // Fetch the actual race guide data using the provided link
+    // Fetch detailed race guide data from the link provided in the previous response
     const raceGuideDataResponse = await instance.get(raceGuideResponse.data.link);
+    console.log('Race guide data response:', JSON.stringify(raceGuideDataResponse.data, null, 2));
+
+    // Store the race guide data in a variable for processing
     const raceGuide = raceGuideDataResponse.data;
 
     console.log('Processing race data');
-
-    // Process the race data and transform it into an array of race objects
-    const officialRaces = raceGuide.sessions.map(session => {
-      const race = {
-        id: session.subsession_id,
-        season_id: session.season_id,
-        race_week_num: session.race_week_num,
-        session_id: session.session_id,
-        start_time: session.start_time,
-        track_name: session.track ? session.track.track_name : 'Unknown Track',
-        state: session.state || 'Unknown State',
-        track: session.track ? session.track.config_name : 'Unknown Configuration',
-        license_level: session.license_level || 1,
-        car_class: session.car_class || 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      // Check if essential race data is missing
-      // If any critical field is missing, log a warning and skip the race
-      if (!race.id || !race.season_id || !race.track_name) {
-        console.warn('Missing required race data:', race);
-        return null;
-      }
-
-      return race;
-    }).filter(race => race !== null); // Remove races that are incomplete
+    // Process the race guide data to extract official races
+    const officialRaces = raceGuide.sessions
+      .filter(session => session.license_group !== null) // Filter out sessions without a license group
+      .map(session => {
+        const raceStartTime = new Date(session.start_time);
+        return {
+          title: session.series_name || 'Unknown Series',
+          start_time: session.start_time,
+          track_name: session.track ? session.track.track_name : 'Unknown Track',
+          state: calculateRaceState(raceStartTime),
+          license_level: session.license_level || 1,
+          car_class: session.car_class || 1,
+          number_of_racers: session.num_drivers || 0 // Assuming `num_drivers` is the field representing the number of racers
+        };
+      })
+      .filter(race => race.title && race.start_time); // Filter out races without a title or start time
 
     console.log(`Processed ${officialRaces.length} official races`);
-    return officialRaces;
+    return officialRaces; // Return the processed list of official races
   } catch (error) {
+    // Log any errors that occur during the race data fetching process
     console.error('Error fetching races from iRacing API:', error.message);
-    throw error;
+    console.error('Error stack:', error.stack);
+    throw error; // Re-throw the error to be handled by the calling function
   }
 }
 
 /**
- * Retrieves official races from Supabase.
- * Optionally fetches fresh data from iRacing, upserts it to Supabase, and then returns the data.
+ * This function retrieves a list of official races from the database (Supabase),
+ * and optionally fetches fresh data from the iRacing API if necessary.
+ * It handles pagination and limits the number of races returned.
  * 
- * @param {number} page - The current page number for pagination.
- * @param {number} limit - The number of races to return per page.
- * @returns {Object} - An object containing the races, total count, page, and limit.
+ * @param {number} page - The page number for pagination (default is 1).
+ * @param {number} limit - The maximum number of races to return (default is 10).
+ * @returns {Object} - An object containing the list of races, total count, page, and limit.
  */
 async function getOfficialRaces(page = 1, limit = 10) {
   try {
     console.log(`Getting official races: page ${page}, limit ${limit}`);
     
-    // Fetch fresh race data from iRacing
+    // Ensure page is at least 1
+    page = Math.max(1, page);
+
+    // Fetch fresh race data from iRacing API
+    console.log('Fetching fresh race data from iRacing API');
     const freshRaces = await fetchRacesFromIRacingAPI();
     
-    // Upsert the fresh race data into Supabase
     if (freshRaces.length > 0) {
       console.log('Updating Supabase with new race data');
       const { error: upsertError } = await supabase
@@ -172,8 +223,8 @@ async function getOfficialRaces(page = 1, limit = 10) {
     console.log('Fetching races from Supabase');
     const { data: races, error: fetchError, count } = await supabase
       .from('official_races')
-      .select('*', { count: 'exact' })
-      .order('start_time', { ascending: true })
+      .select('title, start_time, track_name, state, license_level, car_class, number_of_racers', { count: 'exact' })
+      .order('start_time', { ascending: true }) // Closest start time first
       .range((page - 1) * limit, page * limit - 1);
 
     if (fetchError) {
@@ -183,6 +234,9 @@ async function getOfficialRaces(page = 1, limit = 10) {
 
     console.log(`Fetched ${races ? races.length : 0} races, total count: ${count || 0}`);
 
+    // Log the actual data returned from Supabase
+    console.log('Races data from Supabase:', JSON.stringify(races, null, 2));
+
     return {
       races: races || [],
       total: count || 0,
@@ -190,25 +244,28 @@ async function getOfficialRaces(page = 1, limit = 10) {
       limit: limit
     };
   } catch (error) {
+    // Log any errors that occur during the race fetching process
     console.error('Error in getOfficialRaces:', error.message);
-    throw error;
+    console.error('Error stack:', error.stack);
+    throw error; // Re-throw the error to be handled by the calling function
   }
 }
 
 /**
- * Searches for an iRacing driver by name using the iRacing API.
- * The function checks for exact matches and partial matches in the driver's display name.
+ * This function searches for a driver's name in the iRacing API.
+ * It sends a request to the API with the search term and returns information about the driver if found.
  * 
  * @param {string} name - The name of the driver to search for.
- * @returns {Object} - An object indicating whether the driver exists, and if so, their name and ID.
+ * @returns {Object} - An object containing the driver's information if found, or a message if not found.
  */
 async function searchIRacingName(name) {
   try {
-    // Get cookies from the CookieJar to authenticate the request
+    // Retrieve cookies from the cookie jar
     const cookies = await cookieJar.getCookies(BASE_URL);
+    // Convert the cookies into a string format suitable for the Cookie header
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
-    // Send a GET request to the driver lookup endpoint with the provided search term
+    // Send a GET request to search for the driver's name in the iRacing API
     const response = await instance.get(`${BASE_URL}/data/lookup/drivers`, {
       params: {
         search_term: name,
@@ -222,24 +279,23 @@ async function searchIRacingName(name) {
 
     console.log('Initial search response:', JSON.stringify(response.data, null, 2));
 
-    // If the response contains a data link, follow it to get more detailed driver data
+    // Check if the response contains a link to the driver's data
     if (response.data && response.data.link) {
+      // Fetch detailed driver data from the link provided in the previous response
       const driverDataResponse = await instance.get(response.data.link);
       console.log('Driver data response:', JSON.stringify(driverDataResponse.data, null, 2));
 
-      // Convert the driver data into an array (if it's not already)
       const drivers = Array.isArray(driverDataResponse.data) ? driverDataResponse.data : [];
 
       console.log('Drivers found:', JSON.stringify(drivers, null, 2));
 
-      // Look for a matching driver by exact or partial name match
       if (drivers.length > 0) {
+        // Find the driver that matches the search term
         const matchingDriver = drivers.find(driver => 
           driver.display_name.toLowerCase() === name.toLowerCase() ||
           driver.display_name.toLowerCase().includes(name.toLowerCase())
         );
 
-        // If a match is found, return the driver's name and ID
         if (matchingDriver) {
           return {
             exists: true,
@@ -250,21 +306,39 @@ async function searchIRacingName(name) {
       }
     }
 
-    // If no match is found, return an object indicating that the driver doesn't exist
     return { exists: false };
   } catch (error) {
+    // Log any errors that occur during the driver search process
     console.error('Error searching for iRacing name:', error.message);
     if (error.response) {
       console.error('Response status:', error.response.status);
       console.error('Response data:', JSON.stringify(error.response.data, null, 2));
     }
+    throw error; // Re-throw the error to be handled by the calling function
+  }
+}
+
+/**
+ * This function retrieves the total count of official races stored in Supabase.
+ * 
+ * @returns {number} - The total number of official races in the database.
+ */
+async function getTotalRacesCount() {
+  const { count, error } = await supabase
+    .from('official_races')
+    .select('*', { count: 'exact', head: true });
+
+  if (error) {
+    console.error('Error getting total race count from Supabase:', error);
     throw error;
   }
+  return count;
 }
 
 // Export the functions so they can be used in other parts of the application
 export {
   login,
-  getOfficialRaces,
-  searchIRacingName
+  verifyAuth,
+  searchIRacingName,
+  getOfficialRaces
 };
