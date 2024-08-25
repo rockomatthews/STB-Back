@@ -94,11 +94,9 @@ async function verifyAuth() {
 
 async function fetchRacesFromIRacingAPI() {
   try {
-    // Fetch cookies for authentication
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
-    // Fetch series seasons data from the iRacing API
     console.log('Fetching series seasons data from iRacing API');
     const seasonsResponse = await instance.get(`${BASE_URL}/data/series/seasons`, {
       params: { include_series: true },
@@ -109,11 +107,9 @@ async function fetchRacesFromIRacingAPI() {
       throw new Error('Invalid seasons response from iRacing API');
     }
 
-    // Fetch detailed season data
     const seasonsDataResponse = await instance.get(seasonsResponse.data.link);
     const seriesSeasons = seasonsDataResponse.data;
 
-    // Fetch race guide data from the iRacing API
     console.log('Fetching race guide data from iRacing API');
     const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
       headers: { 'Cookie': cookieString }
@@ -123,15 +119,17 @@ async function fetchRacesFromIRacingAPI() {
       throw new Error('Invalid race guide response from iRacing API');
     }
 
-    // Fetch detailed race guide data
     const raceGuideDataResponse = await instance.get(raceGuideResponse.data.link);
     const raceGuide = raceGuideDataResponse.data;
 
     console.log('Processing race data');
 
-    // Map and validate the fetched data into the expected format
     const officialRaces = raceGuide.sessions.map(session => {
       const seriesSeason = seriesSeasons.find(season => season.season_id === session.season_id);
+
+      // Log session and seriesSeason data for debugging
+      console.log('Session Data:', session);
+      console.log('Series Season Data:', seriesSeason);
 
       const race = {
         id: session.subsession_id,
@@ -139,28 +137,28 @@ async function fetchRacesFromIRacingAPI() {
         series_id: seriesSeason ? seriesSeason.series_id : null,
         race_week_num: session.race_week_num,
         session_id: session.session_id,
-        license_group: session.license_group || 1, // Add default value if missing
+        license_group: session.license_group || 1,
         name: seriesSeason ? seriesSeason.series_name : 'Unknown Series',
         start_time: session.start_time,
         end_time: calculateEndTime(session),
         track_name: session.track ? session.track.track_name : 'Unknown Track',
-        category_id: seriesSeason ? seriesSeason.category_id : 1, // Add default value if missing
-        state: session.state || 'Unknown State', // Add default value if missing
+        category_id: seriesSeason ? seriesSeason.category_id : 1,
+        state: session.state || 'Unknown State',
         track: session.track ? session.track.config_name : 'Unknown Configuration',
-        license_level: session.license_level || 1, // Add default value if missing
-        car_class: session.car_class || 1, // Add default value if missing
+        license_level: session.license_level || 1,
+        car_class: session.car_class || 1,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
-      // Validate required fields
+      // Additional logging to identify missing data
       if (!race.id || !race.season_id || !race.series_id || !race.track_name) {
-        console.error('Missing required race data:', race);
+        console.warn('Missing required race data:', race);
         return null;
       }
 
       return race;
-    }).filter(race => race !== null); // Filter out invalid races
+    }).filter(race => race !== null); // Filter out incomplete races
 
     console.log(`Processed ${officialRaces.length} official races`);
     return officialRaces;
@@ -169,6 +167,22 @@ async function fetchRacesFromIRacingAPI() {
     throw error;
   }
 }
+
+function calculateEndTime(session) {
+  if (session.end_time) return session.end_time;
+  
+  const startTime = new Date(session.start_time);
+  let duration = 0;
+  
+  if (session.race_lap_limit) {
+    duration = session.race_lap_limit * 2; // Estimate 2 minutes per lap
+  } else if (session.race_time_limit) {
+    duration = session.race_time_limit;
+  }
+  
+  return new Date(startTime.getTime() + duration * 60000).toISOString();
+}
+
 
 function calculateEndTime(session) {
   if (session.end_time) return session.end_time;
