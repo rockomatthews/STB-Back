@@ -1,50 +1,64 @@
 import axios from 'axios';
-import crypto from 'crypto';
 import https from 'https';
 import tough from 'tough-cookie';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
+// Load environment variables from the .env file
 dotenv.config();
 
+// Destructure tough's CookieJar class to manage cookies for axios requests
 const { CookieJar } = tough;
+
+// Define the base URL for iRacing's API
 const BASE_URL = 'https://members-ng.iracing.com';
+
+// Instantiate a new CookieJar to store and manage cookies
 const cookieJar = new CookieJar();
 
+// Create an axios instance with custom configurations
+// The httpsAgent allows self-signed certificates, avoiding SSL errors
 const instance = axios.create({
-  httpsAgent: new https.Agent({  
+  httpsAgent: new https.Agent({
     rejectUnauthorized: false
   })
 });
 
+// Retrieve Supabase URL and Anon Key from environment variables
+// These are essential for interacting with the Supabase database
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
+// Ensure that both the Supabase URL and Anon Key are present
+// If not, throw an error to prevent further execution
 if (!supabaseUrl || !supabaseKey) {
   throw new Error('Supabase URL or Anon Key is not set in environment variables');
 }
 
+// Initialize the Supabase client using the URL and Key from the environment
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-function hashPassword(password, email) {
-  const hash = crypto.createHash('sha256');
-  hash.update(password + email.toLowerCase());
-  return hash.digest('base64');
-}
-
+/**
+ * Logs in to iRacing by sending a POST request to the auth endpoint.
+ * If successful, the response contains cookies that are stored in the CookieJar.
+ * 
+ * @param {string} email - The user's email.
+ * @param {string} password - The user's password.
+ * @returns {boolean} - Returns true if login was successful, otherwise false.
+ */
 async function login(email, password) {
-  const hashedPassword = hashPassword(password, email);
-
   try {
+    // Send a POST request to iRacing's auth endpoint with the user's credentials
     const response = await instance.post(`${BASE_URL}/auth`, {
       email,
-      password: hashedPassword
+      password
     }, {
       headers: {
         'Content-Type': 'application/json'
       }
     });
 
+    // If the response contains cookies, store them in the CookieJar
     if (response.headers['set-cookie']) {
       response.headers['set-cookie'].forEach(cookie => {
         cookieJar.setCookieSync(cookie, BASE_URL);
@@ -53,99 +67,52 @@ async function login(email, password) {
       return true;
     } else {
       console.error('No cookies in response');
-      console.log('Response headers:', response.headers);
-      console.log('Response data:', response.data);
       throw new Error('No cookies in response');
     }
   } catch (error) {
     console.error('Login failed:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-    }
     return false;
   }
 }
 
-async function verifyAuth() {
-  try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
-    
-    console.log('Verifying auth with cookies:', cookieString);
-
-    const response = await instance.get(`${BASE_URL}/data/doc`, {
-      headers: {
-        'Cookie': cookieString
-      }
-    });
-
-    console.log('Verification response status:', response.status);
-    return response.status === 200;
-  } catch (error) {
-    console.error('Auth verification failed:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-    }
-    return false;
-  }
-}
-
+/**
+ * Fetches race data from the iRacing API's race guide endpoint.
+ * The data is processed and returned as an array of race objects.
+ * 
+ * @returns {Array} - Returns an array of processed race objects.
+ */
 async function fetchRacesFromIRacingAPI() {
   try {
+    // Get cookies from the CookieJar to authenticate the request
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
-    console.log('Fetching series seasons data from iRacing API');
-    const seasonsResponse = await instance.get(`${BASE_URL}/data/series/seasons`, {
-      params: { include_series: true },
-      headers: { 'Cookie': cookieString }
-    });
-
-    if (!seasonsResponse.data || !seasonsResponse.data.link) {
-      throw new Error('Invalid seasons response from iRacing API');
-    }
-
-    const seasonsDataResponse = await instance.get(seasonsResponse.data.link);
-    const seriesSeasons = seasonsDataResponse.data;
-
-    console.log('Series Seasons Data:', JSON.stringify(seriesSeasons, null, 2));
-
+    // Fetch race guide data from iRacing's API
     console.log('Fetching race guide data from iRacing API');
     const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
       headers: { 'Cookie': cookieString }
     });
 
+    // Validate the response and extract the data link
     if (!raceGuideResponse.data || !raceGuideResponse.data.link) {
       throw new Error('Invalid race guide response from iRacing API');
     }
 
+    // Fetch the actual race guide data using the provided link
     const raceGuideDataResponse = await instance.get(raceGuideResponse.data.link);
     const raceGuide = raceGuideDataResponse.data;
 
-    console.log('Race Guide Data:', JSON.stringify(raceGuide, null, 2));
-
     console.log('Processing race data');
 
+    // Process the race data and transform it into an array of race objects
     const officialRaces = raceGuide.sessions.map(session => {
-      const seriesSeason = seriesSeasons.find(season => season.season_id === session.season_id);
-
-      // Log session and seriesSeason data for debugging
-      console.log('Session Data:', JSON.stringify(session, null, 2));
-      console.log('Series Season Data:', JSON.stringify(seriesSeason, null, 2));
-
       const race = {
         id: session.subsession_id,
         season_id: session.season_id,
-        series_id: seriesSeason ? seriesSeason.series_id : null,
         race_week_num: session.race_week_num,
         session_id: session.session_id,
-        license_group: session.license_group || 1,
-        name: seriesSeason ? seriesSeason.series_name : 'Unknown Series',
         start_time: session.start_time,
         track_name: session.track ? session.track.track_name : 'Unknown Track',
-        category_id: seriesSeason ? seriesSeason.category_id : 1,
         state: session.state || 'Unknown State',
         track: session.track ? session.track.config_name : 'Unknown Configuration',
         license_level: session.license_level || 1,
@@ -154,16 +121,17 @@ async function fetchRacesFromIRacingAPI() {
         updated_at: new Date().toISOString(),
       };
 
-      // Additional logging to identify missing data
-      if (!race.id || !race.season_id || !race.series_id || !race.track_name) {
+      // Check if essential race data is missing
+      // If any critical field is missing, log a warning and skip the race
+      if (!race.id || !race.season_id || !race.track_name) {
         console.warn('Missing required race data:', race);
         return null;
       }
 
       return race;
-    }).filter(race => race !== null); // Filter out incomplete races
+    }).filter(race => race !== null); // Remove races that are incomplete
 
-    console.log(`Processed ${officialRaces.length} official races:`, JSON.stringify(officialRaces, null, 2));
+    console.log(`Processed ${officialRaces.length} official races`);
     return officialRaces;
   } catch (error) {
     console.error('Error fetching races from iRacing API:', error.message);
@@ -171,15 +139,22 @@ async function fetchRacesFromIRacingAPI() {
   }
 }
 
+/**
+ * Retrieves official races from Supabase.
+ * Optionally fetches fresh data from iRacing, upserts it to Supabase, and then returns the data.
+ * 
+ * @param {number} page - The current page number for pagination.
+ * @param {number} limit - The number of races to return per page.
+ * @returns {Object} - An object containing the races, total count, page, and limit.
+ */
 async function getOfficialRaces(page = 1, limit = 10) {
   try {
     console.log(`Getting official races: page ${page}, limit ${limit}`);
     
-    page = Math.max(1, page);
-
-    console.log('Fetching fresh race data from iRacing API');
+    // Fetch fresh race data from iRacing
     const freshRaces = await fetchRacesFromIRacingAPI();
     
+    // Upsert the fresh race data into Supabase
     if (freshRaces.length > 0) {
       console.log('Updating Supabase with new race data');
       const { error: upsertError } = await supabase
@@ -193,6 +168,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
       }
     }
 
+    // Fetch races from Supabase
     console.log('Fetching races from Supabase');
     const { data: races, error: fetchError, count } = await supabase
       .from('official_races')
@@ -206,7 +182,6 @@ async function getOfficialRaces(page = 1, limit = 10) {
     }
 
     console.log(`Fetched ${races ? races.length : 0} races, total count: ${count || 0}`);
-    console.log('Races data from Supabase:', JSON.stringify(races, null, 2));
 
     return {
       races: races || [],
@@ -216,16 +191,24 @@ async function getOfficialRaces(page = 1, limit = 10) {
     };
   } catch (error) {
     console.error('Error in getOfficialRaces:', error.message);
-    console.error('Error stack:', error.stack);
     throw error;
   }
 }
 
+/**
+ * Searches for an iRacing driver by name using the iRacing API.
+ * The function checks for exact matches and partial matches in the driver's display name.
+ * 
+ * @param {string} name - The name of the driver to search for.
+ * @returns {Object} - An object indicating whether the driver exists, and if so, their name and ID.
+ */
 async function searchIRacingName(name) {
   try {
+    // Get cookies from the CookieJar to authenticate the request
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
+    // Send a GET request to the driver lookup endpoint with the provided search term
     const response = await instance.get(`${BASE_URL}/data/lookup/drivers`, {
       params: {
         search_term: name,
@@ -239,20 +222,24 @@ async function searchIRacingName(name) {
 
     console.log('Initial search response:', JSON.stringify(response.data, null, 2));
 
+    // If the response contains a data link, follow it to get more detailed driver data
     if (response.data && response.data.link) {
       const driverDataResponse = await instance.get(response.data.link);
       console.log('Driver data response:', JSON.stringify(driverDataResponse.data, null, 2));
 
+      // Convert the driver data into an array (if it's not already)
       const drivers = Array.isArray(driverDataResponse.data) ? driverDataResponse.data : [];
 
       console.log('Drivers found:', JSON.stringify(drivers, null, 2));
 
+      // Look for a matching driver by exact or partial name match
       if (drivers.length > 0) {
         const matchingDriver = drivers.find(driver => 
           driver.display_name.toLowerCase() === name.toLowerCase() ||
           driver.display_name.toLowerCase().includes(name.toLowerCase())
         );
 
+        // If a match is found, return the driver's name and ID
         if (matchingDriver) {
           return {
             exists: true,
@@ -263,6 +250,7 @@ async function searchIRacingName(name) {
       }
     }
 
+    // If no match is found, return an object indicating that the driver doesn't exist
     return { exists: false };
   } catch (error) {
     console.error('Error searching for iRacing name:', error.message);
@@ -274,21 +262,9 @@ async function searchIRacingName(name) {
   }
 }
 
-async function getTotalRacesCount() {
-  const { count, error } = await supabase
-    .from('official_races')
-    .select('*', { count: 'exact', head: true });
-
-  if (error) {
-    console.error('Error getting total race count from Supabase:', error);
-    throw error;
-  }
-  return count;
-}
-
+// Export the functions so they can be used in other parts of the application
 export {
   login,
-  verifyAuth,
-  searchIRacingName,
-  getOfficialRaces
+  getOfficialRaces,
+  searchIRacingName
 };
