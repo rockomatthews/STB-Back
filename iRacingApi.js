@@ -1,9 +1,9 @@
-import axios from 'axios';
-import crypto from 'crypto';
-import https from 'https';
-import tough from 'tough-cookie';
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import axios from 'axios'; // Import the Axios library to make HTTP requests
+import crypto from 'crypto'; // Import the Crypto library for password hashing
+import https from 'https'; // Import HTTPS module to manage SSL settings
+import tough from 'tough-cookie'; // Import tough-cookie to manage cookies
+import { createClient } from '@supabase/supabase-js'; // Import Supabase client to interact with the database
+import dotenv from 'dotenv'; // Import dotenv to load environment variables
 
 // Load environment variables from a .env file into process.env
 dotenv.config();
@@ -48,9 +48,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  * @returns {string} - The Base64 encoded hash of the password and email.
  */
 function hashPassword(password, email) {
-  const hash = crypto.createHash('sha256');
-  hash.update(password + email.toLowerCase());
-  return hash.digest('base64');
+  const hash = crypto.createHash('sha256'); // Create a SHA-256 hash object
+  hash.update(password + email.toLowerCase()); // Update the hash with the password and email
+  return hash.digest('base64'); // Return the Base64 encoded hash
 }
 
 /**
@@ -154,8 +154,8 @@ async function fetchRacesFromIRacingAPI() {
     console.log('Fetching series seasons data from iRacing API');
     // Fetch series seasons data from the iRacing API
     const seasonsResponse = await instance.get(`${BASE_URL}/data/series/seasons`, {
-      params: { include_series: true },
-      headers: { 'Cookie': cookieString }
+      params: { include_series: true }, // Include the series in the response
+      headers: { 'Cookie': cookieString } // Include cookies in the request
     });
 
     // Log the response data for debugging purposes
@@ -176,7 +176,7 @@ async function fetchRacesFromIRacingAPI() {
     console.log('Fetching race guide data from iRacing API');
     // Fetch race guide data from the iRacing API
     const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
-      headers: { 'Cookie': cookieString }
+      headers: { 'Cookie': cookieString } // Include cookies in the request
     });
 
     // Log the response data for debugging purposes
@@ -308,6 +308,9 @@ async function getOfficialRaces(page = 1, limit = 10) {
     }
 
     console.log(`Fetched ${races ? races.length : 0} races, total count: ${count || 0}`);
+
+    // Log the actual data returned from Supabase
+    console.log('Races data from Supabase:', JSON.stringify(races, null, 2));
 
     return {
       races: races || [],
