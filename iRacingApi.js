@@ -146,94 +146,64 @@ async function verifyAuth() {
  */
 async function fetchRacesFromIRacingAPI() {
   try {
-    // Retrieve cookies from the cookie jar
     const cookies = await cookieJar.getCookies(BASE_URL);
-    // Convert the cookies into a string format suitable for the Cookie header
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
     console.log('Fetching series seasons data from iRacing API');
-    // Fetch series seasons data from the iRacing API
     const seasonsResponse = await instance.get(`${BASE_URL}/data/series/seasons`, {
-      params: { include_series: true }, // Include the series in the response
-      headers: { 'Cookie': cookieString } // Include cookies in the request
+      params: { include_series: true },
+      headers: { 'Cookie': cookieString }
     });
 
-    // Log the response data for debugging purposes
-    console.log('Seasons response:', JSON.stringify(seasonsResponse.data, null, 2));
-
-    // Check if the response contains a valid link for further data retrieval
     if (!seasonsResponse.data || !seasonsResponse.data.link) {
       throw new Error('Invalid seasons response from iRacing API');
     }
 
-    // Fetch detailed season data from the link provided in the previous response
     const seasonsDataResponse = await instance.get(seasonsResponse.data.link);
-    console.log('Seasons data response:', JSON.stringify(seasonsDataResponse.data, null, 2));
-
-    // Store the series seasons data in a variable for later use
     const seriesSeasons = seasonsDataResponse.data;
 
     console.log('Fetching race guide data from iRacing API');
-    // Fetch race guide data from the iRacing API
     const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
-      headers: { 'Cookie': cookieString } // Include cookies in the request
+      headers: { 'Cookie': cookieString }
     });
 
-    // Log the response data for debugging purposes
-    console.log('Race guide response:', JSON.stringify(raceGuideResponse.data, null, 2));
-
-    // Check if the response contains a valid link for further data retrieval
     if (!raceGuideResponse.data || !raceGuideResponse.data.link) {
       throw new Error('Invalid race guide response from iRacing API');
     }
 
-    // Fetch detailed race guide data from the link provided in the previous response
     const raceGuideDataResponse = await instance.get(raceGuideResponse.data.link);
-    console.log('Race guide data response:', JSON.stringify(raceGuideDataResponse.data, null, 2));
-
-    // Store the race guide data in a variable for processing
     const raceGuide = raceGuideDataResponse.data;
 
     console.log('Processing race data');
-    // Process the race guide data to extract official races
-    const officialRaces = raceGuide.sessions
-      .filter(session => 
-        session.license_group !== null && // Official races have a license group
-        (session.state === 'Qualifying' || session.state === 'Practice') // Only Qualifying or Practice sessions
-      )
-      .map(session => {
-        // Find the series season that matches the session's season ID
-        const seriesSeason = seriesSeasons.find(season => season.season_id === session.season_id);
-        console.log('Processing session:', JSON.stringify(session, null, 2)); // Log each session for debugging
-        return {
-          id: session.subsession_id,
-          season_id: session.season_id,
-          series_id: seriesSeason ? seriesSeason.series_id : null,
-          race_week_num: session.race_week_num,
-          session_id: session.session_id,
-          license_group: session.license_group,
-          name: seriesSeason ? seriesSeason.series_name : 'Unknown Series',
-          start_time: session.start_time,
-          end_time: calculateEndTime(session),
-          track_name: session.track ? session.track.track_name : 'Unknown Track',
-          category_id: seriesSeason ? seriesSeason.category_id : null,
-          state: session.state,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-      })
-      .filter(race => race.id && race.start_time) // Filter out races without an ID or start time
-      .sort((a, b) => new Date(a.start_time) - new Date(b.start_time)); // Sort races by start time
+    // Process the race guide data with minimal filtering
+    const officialRaces = raceGuide.sessions.map(session => {
+      const seriesSeason = seriesSeasons.find(season => season.season_id === session.season_id);
+      return {
+        id: session.subsession_id,
+        season_id: session.season_id,
+        series_id: seriesSeason ? seriesSeason.series_id : null,
+        race_week_num: session.race_week_num,
+        session_id: session.session_id,
+        license_group: session.license_group,
+        name: seriesSeason ? seriesSeason.series_name : 'Unknown Series',
+        start_time: session.start_time,
+        end_time: calculateEndTime(session),
+        track_name: session.track ? session.track.track_name : 'Unknown Track',
+        category_id: seriesSeason ? seriesSeason.category_id : null,
+        state: session.state,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    });
 
     console.log(`Processed ${officialRaces.length} official races`);
-    return officialRaces; // Return the processed list of official races
+    return officialRaces;
   } catch (error) {
-    // Log any errors that occur during the race data fetching process
     console.error('Error fetching races from iRacing API:', error.message);
-    console.error('Error stack:', error.stack);
-    throw error; // Re-throw the error to be handled by the calling function
+    throw error;
   }
 }
+
 
 /**
  * This function calculates the end time for a race session based on its start time and duration.
