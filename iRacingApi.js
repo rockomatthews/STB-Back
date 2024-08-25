@@ -110,6 +110,8 @@ async function fetchRacesFromIRacingAPI() {
     const seasonsDataResponse = await instance.get(seasonsResponse.data.link);
     const seriesSeasons = seasonsDataResponse.data;
 
+    console.log('Series Seasons Data:', JSON.stringify(seriesSeasons, null, 2));
+
     console.log('Fetching race guide data from iRacing API');
     const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
       headers: { 'Cookie': cookieString }
@@ -122,14 +124,16 @@ async function fetchRacesFromIRacingAPI() {
     const raceGuideDataResponse = await instance.get(raceGuideResponse.data.link);
     const raceGuide = raceGuideDataResponse.data;
 
+    console.log('Race Guide Data:', JSON.stringify(raceGuide, null, 2));
+
     console.log('Processing race data');
 
     const officialRaces = raceGuide.sessions.map(session => {
       const seriesSeason = seriesSeasons.find(season => season.season_id === session.season_id);
 
       // Log session and seriesSeason data for debugging
-      console.log('Session Data:', session);
-      console.log('Series Season Data:', seriesSeason);
+      console.log('Session Data:', JSON.stringify(session, null, 2));
+      console.log('Series Season Data:', JSON.stringify(seriesSeason, null, 2));
 
       const race = {
         id: session.subsession_id,
@@ -159,7 +163,7 @@ async function fetchRacesFromIRacingAPI() {
       return race;
     }).filter(race => race !== null); // Filter out incomplete races
 
-    console.log(`Processed ${officialRaces.length} official races`);
+    console.log(`Processed ${officialRaces.length} official races:`, JSON.stringify(officialRaces, null, 2));
     return officialRaces;
   } catch (error) {
     console.error('Error fetching races from iRacing API:', error.message);
