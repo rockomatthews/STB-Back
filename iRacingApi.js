@@ -160,10 +160,88 @@ function calculateRaceState(raceStartTime) {
 }
 
 /**
+ * This function fetches the series name from the iRacing API using the series_id.
+ * 
+ * @param {number} series_id - The ID of the series.
+ * @returns {string} - The name of the series or 'Unknown Series' if not found.
+ */
+async function fetchSeriesName(series_id) {
+  try {
+    // Retrieve cookies from the cookie jar
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    // Send a GET request to fetch the series name using the series_id
+    const response = await instance.get(`${BASE_URL}/data/series/get`, {
+      headers: { 'Cookie': cookieString },
+      params: { series_id: series_id }
+    });
+
+    return response.data.series_name || 'Unknown Series';
+  } catch (error) {
+    console.error(`Error fetching series name for series_id ${series_id}:`, error.message);
+    return 'Unknown Series';
+  }
+}
+
+/**
+ * This function fetches the track name from the iRacing API using the track_id.
+ * 
+ * @param {number} track_id - The ID of the track.
+ * @returns {string} - The name of the track or 'Unknown Track' if not found.
+ */
+async function fetchTrackName(track_id) {
+  try {
+    // Retrieve cookies from the cookie jar
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    // Send a GET request to fetch the track name using the track_id
+    const response = await instance.get(`${BASE_URL}/data/track/get`, {
+      headers: { 'Cookie': cookieString },
+      params: { track_id: track_id }
+    });
+
+    return response.data.track_name || 'Unknown Track';
+  } catch (error) {
+    console.error(`Error fetching track name for track_id ${track_id}:`, error.message);
+    return 'Unknown Track';
+  }
+}
+
+/**
+ * This function processes race data by fetching the appropriate series and track names.
+ * It filters out races not in the 'Qualifying' or 'Practice' states.
+ * 
+ * @param {Array<Object>} raceData - The raw race data from the iRacing API.
+ * @returns {Array<Object>} - The processed race data with series names, track names, and state.
+ */
+async function processRaceData(raceData) {
+  const processedRaces = await Promise.all(raceData.map(async race => {
+    const seriesName = await fetchSeriesName(race.series_id);
+    const trackName = race.track ? await fetchTrackName(race.track.track_id) : 'Unknown Track';
+    const state = calculateRaceState(new Date(race.start_time));
+
+    return {
+      title: seriesName,
+      start_time: race.start_time,
+      track_name: trackName,
+      state: state,
+      license_level: race.license_level || 1,
+      car_class: race.car_class || 1,
+      number_of_racers: race.number_of_racers || 0
+    };
+  }));
+
+  // Filter out races that are not in the 'Qualifying' or 'Practice' states
+  return processedRaces.filter(race => race.state === 'Qualifying' || race.state === 'Practice');
+}
+
+/**
  * This function fetches race data from the iRacing API, processes it, and returns a list of official races.
  * It performs an API call to retrieve race guide data, and then filters and processes the data.
  * 
- * @returns {Array<Object>} - Returns an array of official race objects with only the required fields.
+ * @returns {Array<Object>} - Returns an array of official race objects with the required fields.
  */
 async function fetchRacesFromIRacingAPI() {
   try {
@@ -195,23 +273,7 @@ async function fetchRacesFromIRacingAPI() {
 
     console.log('Processing race data');
     // Process the race guide data to extract official races
-    const officialRaces = raceGuide.sessions
-      .filter(session => session.license_group !== null) // Filter out sessions without a license group
-      .map(session => {
-        const raceStartTime = new Date(session.start_time);
-        const state = calculateRaceState(raceStartTime);
-
-        return {
-          title: session.series_name || 'Unknown Series',
-          start_time: session.start_time,
-          track_name: session.track ? session.track.track_name : 'Unknown Track',
-          state,
-          license_level: session.license_level || 1,
-          car_class: session.car_class || 1,
-          number_of_racers: session.num_drivers || 0 // Assuming `num_drivers` is the field representing the number of racers
-        };
-      })
-      .filter(race => race.title && race.start_time && (race.state === 'Qualifying' || race.state === 'Practice')); // Filter to only include races in 'Qualifying' or 'Practice'
+    const officialRaces = await processRaceData(raceGuide.sessions);
 
     console.log(`Processed ${officialRaces.length} official races`);
     return officialRaces; // Return the processed list of official races
