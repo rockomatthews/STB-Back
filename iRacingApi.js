@@ -167,39 +167,6 @@ async function fetchRacesFromIRacingAPI() {
   }
 }
 
-
-function calculateEndTime(session) {
-  if (session.end_time) return session.end_time;
-  
-  const startTime = new Date(session.start_time);
-  let duration = 0;
-  
-  if (session.race_lap_limit) {
-    duration = session.race_lap_limit * 2; // Estimate 2 minutes per lap
-  } else if (session.race_time_limit) {
-    duration = session.race_time_limit;
-  }
-  
-  return new Date(startTime.getTime() + duration * 60000).toISOString();
-}
-
-
-function calculateEndTime(session) {
-  if (session.end_time) return session.end_time;
-  
-  const startTime = new Date(session.start_time);
-  let duration = 0;
-  
-  if (session.race_lap_limit) {
-    duration = session.race_lap_limit * 2; // Estimate 2 minutes per lap
-  } else if (session.race_time_limit) {
-    duration = session.race_time_limit;
-  }
-  
-  return new Date(startTime.getTime() + duration * 60000).toISOString();
-}
-
-
 async function getOfficialRaces(page = 1, limit = 10) {
   try {
     console.log(`Getting official races: page ${page}, limit ${limit}`);
