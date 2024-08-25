@@ -104,6 +104,41 @@ async function login(email, password) {
 }
 
 /**
+ * This function verifies whether the current session is authenticated by making a request to the iRacing API.
+ * The cookies stored in the cookie jar are sent with the request to validate the session.
+ * 
+ * @returns {boolean} - Returns true if the session is authenticated, false otherwise.
+ */
+async function verifyAuth() {
+  try {
+    // Retrieve cookies from the cookie jar
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    // Convert the cookies into a string format suitable for the Cookie header
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+    
+    console.log('Verifying auth with cookies:', cookieString);
+
+    // Send a GET request to verify the authentication status
+    const response = await instance.get(`${BASE_URL}/data/doc`, {
+      headers: {
+        'Cookie': cookieString
+      }
+    });
+
+    console.log('Verification response status:', response.status);
+    return response.status === 200; // Return true if the status is 200 (OK)
+  } catch (error) {
+    // Log any errors that occur during the authentication verification process
+    console.error('Auth verification failed:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
+    return false; // Return false indicating failed authentication
+  }
+}
+
+/**
  * This function calculates the custom state for a race based on the start time.
  * 
  * @param {Date} raceStartTime - The start time of the race.
@@ -340,5 +375,6 @@ export {
   login,
   verifyAuth,
   searchIRacingName,
-  getOfficialRaces
+  getOfficialRaces,
+  getTotalRacesCount
 };
