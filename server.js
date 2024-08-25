@@ -2,11 +2,13 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { login, verifyAuth, getOfficialRaces, searchIRacingName } from './iRacingApi.js';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
 const app = express();
 
+// Set up CORS with the frontend's URL
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.speedtrapbets.com';
 
 app.use(cors({
@@ -19,6 +21,10 @@ app.use(cors({
 app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const MAX_LOGIN_ATTEMPTS = 3;
 const LOGIN_RETRY_DELAY = 5000; // 5 seconds
@@ -56,6 +62,7 @@ app.get('/api/test-supabase', async (req, res) => {
   }
 });
 
+// Middleware to verify the authentication
 const checkAuth = async (req, res, next) => {
   try {
     const isAuthenticated = await verifyAuth();
@@ -71,10 +78,12 @@ const checkAuth = async (req, res, next) => {
   }
 };
 
+// Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
+// Login endpoint
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -96,6 +105,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Endpoint to get official races with pagination
 app.get('/api/official-races', checkAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -117,6 +127,7 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
   }
 });
 
+// Endpoint to search for an iRacing name
 app.get('/api/search-iracing-name', checkAuth, async (req, res) => {
   try {
     const { name } = req.query;
@@ -144,6 +155,7 @@ app.get('/api/search-iracing-name', checkAuth, async (req, res) => {
   }
 });
 
+// Start the server and attempt login to iRacing API
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   const loginSuccess = await attemptLogin();
