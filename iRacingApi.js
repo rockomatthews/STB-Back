@@ -140,7 +140,6 @@ async function fetchRacesFromIRacingAPI() {
         license_group: session.license_group || 1,
         name: seriesSeason ? seriesSeason.series_name : 'Unknown Series',
         start_time: session.start_time,
-        end_time: calculateEndTime(session),
         track_name: session.track ? session.track.track_name : 'Unknown Track',
         category_id: seriesSeason ? seriesSeason.category_id : 1,
         state: session.state || 'Unknown State',
@@ -167,6 +166,7 @@ async function fetchRacesFromIRacingAPI() {
     throw error;
   }
 }
+
 
 function calculateEndTime(session) {
   if (session.end_time) return session.end_time;
