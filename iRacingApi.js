@@ -172,14 +172,20 @@ async function processRaceData(raceData, seriesData, trackData) {
       track_name: track ? track.track_name : 'Unknown Track',
       state: state,
       license_level: series ? series.allowed_licenses[0].group_name : 'Unknown',
-      category: series ? series.category : 'Unknown',
-      number_of_racers: race.registered_drivers || 0,
+      car_class: series ? series.category_id : 0, // Use category_id instead of category
+      number_of_racers: race.entry_count || 0,
       series_id: race.series_id
     };
 
     console.log('Processed race:', JSON.stringify(processedRace, null, 2));
     return processedRace;
-  }).filter(race => race.state === 'Qualifying' || race.state === 'Practice');
+  }).filter(race => race.state === 'Qualifying' || race.state === 'Practice')
+    .sort((a, b) => {
+      if (a.state === b.state) {
+        return new Date(a.start_time) - new Date(b.start_time);
+      }
+      return a.state === 'Qualifying' ? -1 : 1;
+    });
 }
 
 async function fetchRacesFromIRacingAPI() {
@@ -248,8 +254,9 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
           track_name: race.track_name,
           state: race.state,
           license_level: race.license_level,
-          car_class: race.category || 'Unknown',
-          number_of_racers: race.number_of_racers
+          car_class: race.car_class,
+          number_of_racers: race.number_of_racers,
+          series_id: race.series_id
         })), {
           onConflict: 'id',
           update: [
