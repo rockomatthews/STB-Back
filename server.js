@@ -8,7 +8,6 @@ dotenv.config();
 
 const app = express();
 
-// Set up CORS with the frontend's URL
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.speedtrapbets.com';
 
 app.use(cors({
@@ -62,7 +61,6 @@ app.get('/api/test-supabase', async (req, res) => {
   }
 });
 
-// Middleware to verify the authentication
 const checkAuth = async (req, res, next) => {
   try {
     const isAuthenticated = await verifyAuth();
@@ -114,15 +112,12 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
     console.log(`Fetching official races: page ${page}, limit ${limit}`);
     const races = await getOfficialRaces(page, limit);
     console.log(`Successfully fetched ${races.races.length} races`);
-    console.log('Race data:', JSON.stringify(races, null, 2));
     res.json(races);
   } catch (error) {
     console.error('Error fetching official races:', error);
-    console.error('Error stack:', error.stack);
     res.status(500).json({ 
       error: 'An error occurred while fetching official races', 
-      details: error.message,
-      stack: error.stack
+      details: error.message
     });
   }
 });
@@ -138,7 +133,7 @@ app.get('/api/search-iracing-name', checkAuth, async (req, res) => {
     console.log('Searching for:', name);
 
     const result = await searchIRacingName(name);
-    console.log('Search result:', JSON.stringify(result, null, 2));
+    console.log('Search result:', result);
 
     if (result.exists) {
       res.json({ exists: true, name: result.name, id: result.id });
@@ -149,8 +144,7 @@ app.get('/api/search-iracing-name', checkAuth, async (req, res) => {
     console.error('Error in search-iracing-name endpoint:', error);
     res.status(500).json({ 
       error: 'An error occurred while searching for the iRacing name', 
-      details: error.message,
-      stack: error.stack
+      details: error.message
     });
   }
 });
@@ -163,3 +157,5 @@ app.listen(PORT, async () => {
     console.error('Server started but iRacing login failed. Some functionality may be limited.');
   }
 });
+
+export default app;

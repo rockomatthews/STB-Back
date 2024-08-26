@@ -108,64 +108,64 @@ function calculateRaceState(raceStartTime) {
   }
 }
 
-async function fetchSeriesName(series_id) {
+async function fetchSeriesData() {
   try {
-    const { data, error } = await supabase
-      .from('Series')
-      .select('name')
-      .eq('series_id', series_id)
-      .single();
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
-    if (error) {
-      console.error(`Error fetching series name for series_id ${series_id} from Supabase:`, error.message);
-      return 'Unknown Series';
+    const response = await instance.get(`${BASE_URL}/data/series/get`, {
+      headers: { 'Cookie': cookieString }
+    });
+
+    if (response.data && response.data.link) {
+      const seriesDataResponse = await instance.get(response.data.link);
+      return seriesDataResponse.data;
+    } else {
+      throw new Error('Invalid series data response from iRacing API');
     }
-
-    return data.name || 'Unknown Series';
   } catch (error) {
-    console.error(`Error fetching series name for series_id ${series_id} from Supabase:`, error.message);
-    return 'Unknown Series';
+    console.error('Error fetching series data:', error.message);
+    throw error;
   }
 }
 
-async function fetchTrackName(track_id) {
+async function fetchTrackData() {
   try {
-    const { data, error } = await supabase
-      .from('Tracks')
-      .select('name')
-      .eq('track_id', track_id)
-      .single();
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
-    if (error) {
-      console.error(`Error fetching track name for track_id ${track_id} from Supabase:`, error.message);
-      return 'Unknown Track';
+    const response = await instance.get(`${BASE_URL}/data/track/get`, {
+      headers: { 'Cookie': cookieString }
+    });
+
+    if (response.data && response.data.link) {
+      const trackDataResponse = await instance.get(response.data.link);
+      return trackDataResponse.data;
+    } else {
+      throw new Error('Invalid track data response from iRacing API');
     }
-
-    return data.name || 'Unknown Track';
   } catch (error) {
-    console.error(`Error fetching track name for track_id ${track_id} from Supabase:`, error.message);
-    return 'Unknown Track';
+    console.error('Error fetching track data:', error.message);
+    throw error;
   }
 }
 
-async function processRaceData(raceData) {
-  const processedRaces = await Promise.all(raceData.map(async race => {
-    const seriesName = await fetchSeriesName(race.series_id);
-    const trackName = race.track ? await fetchTrackName(race.track.track_id) : 'Unknown Track';
+async function processRaceData(raceData, seriesData, trackData) {
+  return raceData.map(race => {
+    const series = seriesData.find(s => s.series_id === race.series_id);
+    const track = trackData.find(t => t.track_id === race.track.track_id);
     const state = calculateRaceState(new Date(race.start_time));
 
     return {
-      title: seriesName,
+      title: series ? series.series_name : 'Unknown Series',
       start_time: race.start_time,
-      track_name: trackName,
+      track_name: track ? track.track_name : 'Unknown Track',
       state: state,
       license_level: race.license_level || 1,
       car_class: race.car_class || 1,
       number_of_racers: race.entry_count || 0
     };
-  }));
-
-  return processedRaces.filter(race => race.state === 'Qualifying' || race.state === 'Practice');
+  }).filter(race => race.state === 'Qualifying' || race.state === 'Practice');
 }
 
 async function fetchRacesFromIRacingAPI() {
@@ -178,19 +178,21 @@ async function fetchRacesFromIRacingAPI() {
       headers: { 'Cookie': cookieString }
     });
 
-    console.log('Race guide response:', JSON.stringify(raceGuideResponse.data, null, 2));
-
     if (!raceGuideResponse.data || !raceGuideResponse.data.link) {
       throw new Error('Invalid race guide response from iRacing API');
     }
 
     const raceGuideDataResponse = await instance.get(raceGuideResponse.data.link);
-    console.log('Race guide data response:', JSON.stringify(raceGuideDataResponse.data, null, 2));
-
     const raceGuide = raceGuideDataResponse.data;
 
+    console.log('Fetching series data');
+    const seriesData = await fetchSeriesData();
+
+    console.log('Fetching track data');
+    const trackData = await fetchTrackData();
+
     console.log('Processing race data');
-    const officialRaces = await processRaceData(raceGuide.sessions);
+    const officialRaces = await processRaceData(raceGuide.sessions, seriesData, trackData);
 
     console.log(`Processed ${officialRaces.length} official races`);
     return officialRaces;
@@ -237,8 +239,6 @@ async function getOfficialRaces(page = 1, limit = 10) {
 
     console.log(`Fetched ${races ? races.length : 0} races, total count: ${count || 0}`);
 
-    console.log('Races data from Supabase:', JSON.stringify(races, null, 2));
-
     return {
       races: races || [],
       total: count || 0,
@@ -268,15 +268,9 @@ async function searchIRacingName(name) {
       }
     });
 
-    console.log('Initial search response:', JSON.stringify(response.data, null, 2));
-
     if (response.data && response.data.link) {
       const driverDataResponse = await instance.get(response.data.link);
-      console.log('Driver data response:', JSON.stringify(driverDataResponse.data, null, 2));
-
       const drivers = Array.isArray(driverDataResponse.data) ? driverDataResponse.data : [];
-
-      console.log('Drivers found:', JSON.stringify(drivers, null, 2));
 
       if (drivers.length > 0) {
         const matchingDriver = drivers.find(driver => 
@@ -324,4 +318,3 @@ export {
   getOfficialRaces,
   getTotalRacesCount
 };
-
