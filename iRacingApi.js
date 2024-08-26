@@ -151,6 +151,10 @@ async function fetchTrackData() {
 }
 
 async function processRaceData(raceData, seriesData, trackData) {
+  console.log('Sample raw race data:', JSON.stringify(raceData[0], null, 2));
+  console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
+  console.log('Sample track data:', JSON.stringify(trackData[0], null, 2));
+
   return raceData.map(race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
     const track = race.track && race.track.track_id 
@@ -158,7 +162,7 @@ async function processRaceData(raceData, seriesData, trackData) {
       : null;
     const state = calculateRaceState(new Date(race.start_time));
 
-    return {
+    const processedRace = {
       title: series ? series.series_name : 'Unknown Series',
       start_time: race.start_time,
       track_name: track ? track.track_name : 'Unknown Track',
@@ -167,6 +171,9 @@ async function processRaceData(raceData, seriesData, trackData) {
       car_class: race.car_class || 1,
       number_of_racers: race.entry_count || 0
     };
+
+    console.log('Processed race:', JSON.stringify(processedRace, null, 2));
+    return processedRace;
   }).filter(race => race.state === 'Qualifying' || race.state === 'Practice');
 }
 
@@ -220,14 +227,28 @@ async function getOfficialRaces(page = 1, limit = 10) {
     
     if (freshRaces.length > 0) {
       console.log('Updating Supabase with new race data');
-      const { error: upsertError } = await supabase
+      console.log('Sample race data being upserted:', JSON.stringify(freshRaces[0], null, 2));
+      
+      const { data: upsertData, error: upsertError } = await supabase
         .from('official_races')
-        .upsert(freshRaces, { onConflict: 'id' });
+        .upsert(freshRaces, {
+          onConflict: 'id',
+          update: [
+            'title',
+            'start_time',
+            'track_name',
+            'state',
+            'license_level',
+            'car_class',
+            'number_of_racers'
+          ]
+        });
 
       if (upsertError) {
         console.error('Error upserting races:', upsertError);
       } else {
         console.log(`Successfully upserted ${freshRaces.length} races to Supabase`);
+        console.log('Upsert response data:', JSON.stringify(upsertData, null, 2));
       }
     }
 
@@ -244,6 +265,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
     }
 
     console.log(`Fetched ${races ? races.length : 0} races, total count: ${count || 0}`);
+    console.log('Sample race data from Supabase:', JSON.stringify(races[0], null, 2));
 
     return {
       races: races || [],
