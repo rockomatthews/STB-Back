@@ -234,7 +234,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
     console.log('Fetching races from Supabase');
     const { data: races, error: fetchError, count } = await supabase
       .from('official_races')
-      .select('title, start_time, track_name, state, license_level, car_class, number_of_racers', { count: 'exact' })
+      .select('*', { count: 'exact' })
       .order('start_time', { ascending: true })
       .range((page - 1) * limit, page * limit - 1);
 

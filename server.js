@@ -112,6 +112,20 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
     console.log(`Fetching official races: page ${page}, limit ${limit}`);
     const races = await getOfficialRaces(page, limit);
     console.log(`Successfully fetched ${races.races.length} races`);
+    
+    // Log the detailed race data
+    console.log('Detailed race data:');
+    races.races.forEach((race, index) => {
+      console.log(`Race ${index + 1}:`);
+      console.log(`  Title: ${race.title}`);
+      console.log(`  Start Time: ${race.start_time}`);
+      console.log(`  Track Name: ${race.track_name}`);
+      console.log(`  State: ${race.state}`);
+      console.log(`  License Level: ${race.license_level}`);
+      console.log(`  Car Class: ${race.car_class}`);
+      console.log(`  Number of Racers: ${race.number_of_racers}`);
+    });
+
     res.json(races);
   } catch (error) {
     console.error('Error fetching official races:', error);
