@@ -159,47 +159,27 @@ async function processRaceData(raceData, seriesData, trackData) {
   console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
   console.log('Sample track data:', JSON.stringify(trackData[0], null, 2));
 
-  const processedRaces = raceData.map(race => {
+  return raceData.map(race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
     const track = race.track && race.track.track_id 
       ? trackData.find(t => t.track_id === race.track.track_id)
       : null;
     const state = calculateRaceState(race.start_time);
 
-    // Map license level to a more readable format
-    const licenseLevelMap = {
-      1: 'Rookie',
-      2: 'D',
-      3: 'C',
-      4: 'B',
-      5: 'A'
-    };
-
     const processedRace = {
       title: series ? series.series_name : 'Unknown Series',
       start_time: race.start_time,
       track_name: track ? track.track_name : 'Unknown Track',
       state: state,
-      license_level: licenseLevelMap[series ? series.license_group : 1] || 'Rookie',
-      car_class: race.car_class_id || 0,
-      number_of_racers: race.registered_drivers || 0
+      license_level: series ? series.allowed_licenses[0].group_name : 'Unknown',
+      category: series ? series.category : 'Unknown',
+      number_of_racers: race.registered_drivers || 0,
+      series_id: race.series_id
     };
 
     console.log('Processed race:', JSON.stringify(processedRace, null, 2));
     return processedRace;
-  });
-
-  // Filter and sort the races
-  const filteredAndSortedRaces = processedRaces
-    .filter(race => race.state === 'Qualifying' || race.state === 'Practice')
-    .sort((a, b) => {
-      if (a.state === b.state) {
-        return new Date(a.start_time) - new Date(b.start_time);
-      }
-      return a.state === 'Qualifying' ? -1 : 1;
-    });
-
-  return filteredAndSortedRaces;
+  }).filter(race => race.state === 'Qualifying' || race.state === 'Practice');
 }
 
 async function fetchRacesFromIRacingAPI() {
@@ -248,7 +228,7 @@ async function fetchRacesFromIRacingAPI() {
 
 async function getOfficialRaces(userId, page = 1, limit = 10) {
   try {
-    console.log(`Getting official races for user ${userId}: page ${page}, limit ${limit}`);
+    console.log(`Getting official races: page ${page}, limit ${limit}`);
     
     page = Math.max(1, page);
 
@@ -262,16 +242,16 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
       const { data: upsertData, error: upsertError } = await supabase
         .from('official_races')
         .upsert(freshRaces.map(race => ({
-          user_id: userId,
-          ...race,
-          license_level: race.license_level === 'Rookie' ? 1 : 
-                         race.license_level === 'D' ? 2 :
-                         race.license_level === 'C' ? 3 :
-                         race.license_level === 'B' ? 4 :
-                         race.license_level === 'A' ? 5 : 1,
-          car_class: parseInt(race.car_class) || 0
+          id: `${race.series_id}_${race.start_time}`, // Create a unique identifier
+          title: race.title,
+          start_time: race.start_time,
+          track_name: race.track_name,
+          state: race.state,
+          license_level: race.license_level,
+          car_class: race.category || 'Unknown',
+          number_of_racers: race.number_of_racers
         })), {
-          onConflict: 'user_id,title,start_time',
+          onConflict: 'id',
           update: [
             'track_name',
             'state',
@@ -293,7 +273,6 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
     const { data: races, error: fetchError, count } = await supabase
       .from('official_races')
       .select('*', { count: 'exact' })
-      .eq('user_id', userId)
       .or('state.eq.Qualifying,state.eq.Practice')
       .order('state', { ascending: true })
       .order('start_time', { ascending: true })
@@ -308,14 +287,7 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
     console.log('Sample race data from Supabase:', JSON.stringify(races[0], null, 2));
 
     return {
-      races: races ? races.map(race => ({
-        ...race,
-        license_level: race.license_level === 1 ? 'Rookie' :
-                       race.license_level === 2 ? 'D' :
-                       race.license_level === 3 ? 'C' :
-                       race.license_level === 4 ? 'B' :
-                       race.license_level === 5 ? 'A' : 'Unknown'
-      })) : [],
+      races: races || [],
       total: count || 0,
       page: page,
       limit: limit
