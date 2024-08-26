@@ -246,9 +246,9 @@ async function fetchRacesFromIRacingAPI() {
   }
 }
 
-async function getOfficialRaces(page = 1, limit = 10) {
+async function getOfficialRaces(userId, page = 1, limit = 10) {
   try {
-    console.log(`Getting official races: page ${page}, limit ${limit}`);
+    console.log(`Getting official races for user ${userId}: page ${page}, limit ${limit}`);
     
     page = Math.max(1, page);
 
@@ -262,6 +262,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
       const { data: upsertData, error: upsertError } = await supabase
         .from('official_races')
         .upsert(freshRaces.map(race => ({
+          user_id: userId,
           ...race,
           license_level: race.license_level === 'Rookie' ? 1 : 
                          race.license_level === 'D' ? 2 :
@@ -270,7 +271,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
                          race.license_level === 'A' ? 5 : 1,
           car_class: parseInt(race.car_class) || 0
         })), {
-          onConflict: 'title,start_time',
+          onConflict: 'user_id,title,start_time',
           update: [
             'track_name',
             'state',
@@ -292,6 +293,7 @@ async function getOfficialRaces(page = 1, limit = 10) {
     const { data: races, error: fetchError, count } = await supabase
       .from('official_races')
       .select('*', { count: 'exact' })
+      .eq('user_id', userId)
       .or('state.eq.Qualifying,state.eq.Practice')
       .order('state', { ascending: true })
       .order('start_time', { ascending: true })
