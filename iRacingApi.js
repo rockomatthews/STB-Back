@@ -152,17 +152,33 @@ async function fetchTrackData() {
   }
 }
 
+function calculateRaceState(raceStartTime) {
+  const currentTime = new Date();
+  const timeDifference = new Date(raceStartTime) - currentTime;
+  const minutesDifference = timeDifference / (1000 * 60);
+
+  if (minutesDifference <= 0) {
+    return 'Racing';
+  } else if (minutesDifference <= 15) {
+    return 'Qualifying';
+  } else if (minutesDifference <= 45) {
+    return 'Practice';
+  } else {
+    return 'Scheduled';
+  }
+}
+
 async function processRaceData(raceData, seriesData, trackData) {
   console.log('Sample raw race data:', JSON.stringify(raceData[0], null, 2));
   console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
   console.log('Sample track data:', JSON.stringify(trackData[0], null, 2));
 
-  return raceData.map(race => {
+  const processedRaces = raceData.map(race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
     const track = race.track && race.track.track_id 
       ? trackData.find(t => t.track_id === race.track.track_id)
       : null;
-    const state = calculateRaceState(new Date(race.start_time));
+    const state = calculateRaceState(race.start_time);
 
     // Map license level to a more readable format
     const licenseLevelMap = {
@@ -178,14 +194,26 @@ async function processRaceData(raceData, seriesData, trackData) {
       start_time: race.start_time,
       track_name: track ? track.track_name : 'Unknown Track',
       state: state,
-      license_level: licenseLevelMap[series ? series.license_group : 1] || 'Unknown',
-      car_class: race.car_class_id || 'Unknown',
+      license_level: licenseLevelMap[series ? series.license_group : 1] || 'Rookie',
+      car_class: race.car_class_id || 0,
       number_of_racers: race.registered_drivers || 0
     };
 
     console.log('Processed race:', JSON.stringify(processedRace, null, 2));
     return processedRace;
-  }).filter(race => race.state === 'Qualifying' || race.state === 'Practice');
+  });
+
+  // Filter and sort the races
+  const filteredAndSortedRaces = processedRaces
+    .filter(race => race.state === 'Qualifying' || race.state === 'Practice')
+    .sort((a, b) => {
+      if (a.state === b.state) {
+        return new Date(a.start_time) - new Date(b.start_time);
+      }
+      return a.state === 'Qualifying' ? -1 : 1;
+    });
+
+  return filteredAndSortedRaces;
 }
 
 async function fetchRacesFromIRacingAPI() {
@@ -247,11 +275,17 @@ async function getOfficialRaces(page = 1, limit = 10) {
       
       const { data: upsertData, error: upsertError } = await supabase
         .from('official_races')
-        .upsert(freshRaces, {
-          onConflict: 'id',
+        .upsert(freshRaces.map(race => ({
+          ...race,
+          license_level: race.license_level === 'Rookie' ? 1 : 
+                         race.license_level === 'D' ? 2 :
+                         race.license_level === 'C' ? 3 :
+                         race.license_level === 'B' ? 4 :
+                         race.license_level === 'A' ? 5 : 1,
+          car_class: parseInt(race.car_class) || 0
+        })), {
+          onConflict: 'title,start_time',
           update: [
-            'title',
-            'start_time',
             'track_name',
             'state',
             'license_level',
@@ -272,6 +306,8 @@ async function getOfficialRaces(page = 1, limit = 10) {
     const { data: races, error: fetchError, count } = await supabase
       .from('official_races')
       .select('*', { count: 'exact' })
+      .or('state.eq.Qualifying,state.eq.Practice')
+      .order('state', { ascending: true })
       .order('start_time', { ascending: true })
       .range((page - 1) * limit, page * limit - 1);
 
@@ -284,7 +320,14 @@ async function getOfficialRaces(page = 1, limit = 10) {
     console.log('Sample race data from Supabase:', JSON.stringify(races[0], null, 2));
 
     return {
-      races: races || [],
+      races: races ? races.map(race => ({
+        ...race,
+        license_level: race.license_level === 1 ? 'Rookie' :
+                       race.license_level === 2 ? 'D' :
+                       race.license_level === 3 ? 'C' :
+                       race.license_level === 4 ? 'B' :
+                       race.license_level === 5 ? 'A' : 'Unknown'
+      })) : [],
       total: count || 0,
       page: page,
       limit: limit
