@@ -8,15 +8,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const { CookieJar } = tough;
-
 const BASE_URL = 'https://members-ng.iracing.com';
-
 const cookieJar = new CookieJar();
 
 const instance = axios.create({
-  httpsAgent: new https.Agent({  
-    rejectUnauthorized: false
-  })
+  httpsAgent: new https.Agent({ rejectUnauthorized: false }),
 });
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -40,11 +36,9 @@ async function login(email, password) {
   try {
     const response = await instance.post(`${BASE_URL}/auth`, {
       email,
-      password: hashedPassword
+      password: hashedPassword,
     }, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      headers: { 'Content-Type': 'application/json' },
     });
 
     if (response.headers['set-cookie']) {
@@ -73,13 +67,11 @@ async function verifyAuth() {
   try {
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
-    
+
     console.log('Verifying auth with cookies:', cookieString);
 
     const response = await instance.get(`${BASE_URL}/data/doc`, {
-      headers: {
-        'Cookie': cookieString
-      }
+      headers: { 'Cookie': cookieString },
     });
 
     console.log('Verification response status:', response.status);
@@ -116,7 +108,7 @@ async function fetchSeriesName(series_id) {
 
     const response = await instance.get(`${BASE_URL}/data/series/get`, {
       headers: { 'Cookie': cookieString },
-      params: { series_id: series_id }
+      params: { series_id: series_id },
     });
 
     return response.data.series_name || 'Unknown Series';
@@ -133,7 +125,7 @@ async function fetchTrackName(track_id) {
 
     const response = await instance.get(`${BASE_URL}/data/track/get`, {
       headers: { 'Cookie': cookieString },
-      params: { track_id: track_id }
+      params: { track_id: track_id },
     });
 
     return response.data.track_name || 'Unknown Track';
@@ -156,7 +148,7 @@ async function processRaceData(raceData) {
       state: state,
       license_level: race.license_level || 1,
       car_class: race.car_class || 1,
-      number_of_racers: race.number_of_racers || 0
+      number_of_racers: race.entry_count || 0,
     };
   }));
 
@@ -170,7 +162,7 @@ async function fetchRacesFromIRacingAPI() {
 
     console.log('Fetching race guide data from iRacing API');
     const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
-      headers: { 'Cookie': cookieString }
+      headers: { 'Cookie': cookieString },
     });
 
     console.log('Race guide response:', JSON.stringify(raceGuideResponse.data, null, 2));
@@ -185,7 +177,7 @@ async function fetchRacesFromIRacingAPI() {
     const raceGuide = raceGuideDataResponse.data;
 
     console.log('Processing race data');
-    const officialRaces = await processRaceData(raceGuide.sessions);
+    const officialRaces = await processRaceData(raceGuide.sessions.slice(0, 10));
 
     console.log(`Processed ${officialRaces.length} official races`);
     return officialRaces;
@@ -258,9 +250,7 @@ async function searchIRacingName(name) {
         lowerbound: 1,
         upperbound: 25
       },
-      headers: {
-        'Cookie': cookieString
-      }
+      headers: { 'Cookie': cookieString }
     });
 
     console.log('Initial search response:', JSON.stringify(response.data, null, 2));
