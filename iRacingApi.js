@@ -153,7 +153,9 @@ async function fetchTrackData() {
 async function processRaceData(raceData, seriesData, trackData) {
   return raceData.map(race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
-    const track = trackData.find(t => t.track_id === race.track.track_id);
+    const track = race.track && race.track.track_id 
+      ? trackData.find(t => t.track_id === race.track.track_id)
+      : null;
     const state = calculateRaceState(new Date(race.start_time));
 
     return {
@@ -187,11 +189,15 @@ async function fetchRacesFromIRacingAPI() {
 
     console.log('Fetching series data');
     const seriesData = await fetchSeriesData();
+    console.log(`Fetched ${seriesData.length} series`);
 
     console.log('Fetching track data');
     const trackData = await fetchTrackData();
+    console.log(`Fetched ${trackData.length} tracks`);
 
     console.log('Processing race data');
+    console.log(`Total races to process: ${raceGuide.sessions.length}`);
+    
     const officialRaces = await processRaceData(raceGuide.sessions, seriesData, trackData);
 
     console.log(`Processed ${officialRaces.length} official races`);
