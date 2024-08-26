@@ -5,7 +5,7 @@ import tough from 'tough-cookie';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
-console.log('Application starting...'); // Add this line
+console.log('iRacingApi module loading...');
 
 dotenv.config();
 
@@ -36,6 +36,7 @@ function hashPassword(password, email) {
 }
 
 async function login(email, password) {
+  console.log('Attempting to login...');
   const hashedPassword = hashPassword(password, email);
 
   try {
@@ -97,13 +98,14 @@ async function verifyAuth() {
 
 function calculateRaceState(raceStartTime) {
   const currentTime = new Date();
-  const timeDifference = raceStartTime - currentTime;
+  const timeDifference = new Date(raceStartTime) - currentTime;
+  const minutesDifference = timeDifference / (1000 * 60);
 
-  if (timeDifference <= 0) {
+  if (minutesDifference <= 0) {
     return 'Racing';
-  } else if (timeDifference <= 15 * 60 * 1000) {
+  } else if (minutesDifference <= 15) {
     return 'Qualifying';
-  } else if (timeDifference <= 45 * 60 * 1000) {
+  } else if (minutesDifference <= 45) {
     return 'Practice';
   } else {
     return 'Scheduled';
@@ -149,22 +151,6 @@ async function fetchTrackData() {
   } catch (error) {
     console.error('Error fetching track data:', error.message);
     throw error;
-  }
-}
-
-function calculateRaceState(raceStartTime) {
-  const currentTime = new Date();
-  const timeDifference = new Date(raceStartTime) - currentTime;
-  const minutesDifference = timeDifference / (1000 * 60);
-
-  if (minutesDifference <= 0) {
-    return 'Racing';
-  } else if (minutesDifference <= 15) {
-    return 'Qualifying';
-  } else if (minutesDifference <= 45) {
-    return 'Practice';
-  } else {
-    return 'Scheduled';
   }
 }
 
