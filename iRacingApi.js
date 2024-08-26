@@ -167,14 +167,15 @@ async function processRaceData(raceData, seriesData, trackData) {
     const state = calculateRaceState(race.start_time);
 
     const processedRace = {
-      title: series ? series.series_name : 'Unknown Series',
+      race_id: race.session_id,
+      season_id: race.season_id,
+      series_id: race.series_id,
       start_time: race.start_time,
-      track_name: track ? track.track_name : 'Unknown Track',
+      duration: race.end_time ? (new Date(race.end_time) - new Date(race.start_time)) / 60000 : null,
       state: state,
-      license_level: series ? series.allowed_licenses[0].group_name : 'Unknown',
-      car_class: series ? series.category_id : 0, // Use category_id instead of category
-      number_of_racers: race.entry_count || 0,
-      series_id: race.series_id
+      entry_count: race.entry_count,
+      max_entry_co: series ? series.max_starters : null,
+      track_name: track ? track.track_name : 'Unknown Track'
     };
 
     console.log('Processed race:', JSON.stringify(processedRace, null, 2));
@@ -217,7 +218,7 @@ async function fetchRacesFromIRacingAPI() {
 
     console.log('Processing race data');
     console.log(`Total races to process: ${raceGuide.sessions.length}`);
-    
+
     const officialRaces = await processRaceData(raceGuide.sessions, seriesData, trackData);
 
     console.log(`Processed ${officialRaces.length} official races`);
@@ -235,36 +236,29 @@ async function fetchRacesFromIRacingAPI() {
 async function getOfficialRaces(userId, page = 1, limit = 10) {
   try {
     console.log(`Getting official races: page ${page}, limit ${limit}`);
-    
+
     page = Math.max(1, page);
 
     console.log('Fetching fresh race data from iRacing API');
     const freshRaces = await fetchRacesFromIRacingAPI();
-    
+
     if (freshRaces.length > 0) {
       console.log('Updating Supabase with new race data');
       console.log('Sample race data being upserted:', JSON.stringify(freshRaces[0], null, 2));
-      
+
       const { data: upsertData, error: upsertError } = await supabase
-        .from('official_races')
-        .upsert(freshRaces.map(race => ({
-          id: `${race.series_id}_${race.start_time}`, // Create a unique identifier
-          title: race.title,
-          start_time: race.start_time,
-          track_name: race.track_name,
-          state: race.state,
-          license_level: race.license_level,
-          car_class: race.car_class,
-          number_of_racers: race.number_of_racers,
-          series_id: race.series_id
-        })), {
-          onConflict: 'id',
+        .from('races')
+        .upsert(freshRaces, {
+          onConflict: 'race_id',
           update: [
-            'track_name',
+            'season_id',
+            'series_id',
+            'start_time',
+            'duration',
             'state',
-            'license_level',
-            'car_class',
-            'number_of_racers'
+            'entry_count',
+            'max_entry_co',
+            'track_name'
           ]
         });
 
@@ -278,7 +272,7 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
 
     console.log('Fetching races from Supabase');
     const { data: races, error: fetchError, count } = await supabase
-      .from('official_races')
+      .from('races')
       .select('*', { count: 'exact' })
       .or('state.eq.Qualifying,state.eq.Practice')
       .order('state', { ascending: true })
@@ -355,7 +349,7 @@ async function searchIRacingName(name) {
 
 async function getTotalRacesCount() {
   const { count, error } = await supabase
-    .from('official_races')
+    .from('races')
     .select('*', { count: 'exact', head: true });
 
   if (error) {
