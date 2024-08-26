@@ -164,14 +164,23 @@ async function processRaceData(raceData, seriesData, trackData) {
       : null;
     const state = calculateRaceState(new Date(race.start_time));
 
+    // Map license level to a more readable format
+    const licenseLevelMap = {
+      1: 'Rookie',
+      2: 'D',
+      3: 'C',
+      4: 'B',
+      5: 'A'
+    };
+
     const processedRace = {
       title: series ? series.series_name : 'Unknown Series',
       start_time: race.start_time,
       track_name: track ? track.track_name : 'Unknown Track',
       state: state,
-      license_level: race.license_level || 1,
-      car_class: race.car_class || 1,
-      number_of_racers: race.entry_count || 0
+      license_level: licenseLevelMap[series ? series.license_group : 1] || 'Unknown',
+      car_class: race.car_class_id || 'Unknown',
+      number_of_racers: race.registered_drivers || 0
     };
 
     console.log('Processed race:', JSON.stringify(processedRace, null, 2));
