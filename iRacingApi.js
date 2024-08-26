@@ -5,6 +5,8 @@ import tough from 'tough-cookie';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
+console.log('Application starting...'); // Add this line
+
 dotenv.config();
 
 const { CookieJar } = tough;
@@ -178,6 +180,7 @@ async function processRaceData(raceData, seriesData, trackData) {
 }
 
 async function fetchRacesFromIRacingAPI() {
+  console.log('fetchRacesFromIRacingAPI called');
   try {
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
@@ -188,6 +191,7 @@ async function fetchRacesFromIRacingAPI() {
     });
 
     if (!raceGuideResponse.data || !raceGuideResponse.data.link) {
+      console.error('Invalid race guide response:', raceGuideResponse.data);
       throw new Error('Invalid race guide response from iRacing API');
     }
 
@@ -212,6 +216,9 @@ async function fetchRacesFromIRacingAPI() {
   } catch (error) {
     console.error('Error fetching races from iRacing API:', error.message);
     console.error('Error stack:', error.stack);
+    if (error.response) {
+      console.error('Error response:', error.response.data);
+    }
     throw error;
   }
 }

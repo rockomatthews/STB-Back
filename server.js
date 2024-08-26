@@ -50,6 +50,18 @@ async function attemptLogin(attempts = 0) {
   }
 }
 
+app.get('/api/test-races', async (req, res) => {
+  console.log('Test races endpoint hit');
+  try {
+    const races = await getOfficialRaces(1, 10);
+    console.log('Races retrieved:', JSON.stringify(races, null, 2));
+    res.json(races);
+  } catch (error) {
+    console.error('Error in test races endpoint:', error);
+    res.status(500).json({ error: 'An error occurred while fetching races' });
+  }
+});
+
 app.get('/api/test-supabase', async (req, res) => {
   try {
     const { data, error } = await supabase.from('official_races').select('count').limit(1);
