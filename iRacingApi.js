@@ -235,33 +235,31 @@ async function fetchRacesFromIRacingAPI() {
 async function getOfficialRaces(userId, page = 1, limit = 10) {
   try {
     console.log(`Getting official races: page ${page}, limit ${limit}`);
-
+    
     page = Math.max(1, page);
 
     console.log('Fetching fresh race data from iRacing API');
     const freshRaces = await fetchRacesFromIRacingAPI();
-
+    
     if (freshRaces.length > 0) {
       console.log('Updating Supabase with new race data');
       console.log('Sample race data being upserted:', JSON.stringify(freshRaces[0], null, 2));
-
+      
       const { data: upsertData, error: upsertError } = await supabase
         .from('official_races')
         .upsert(freshRaces.map(race => ({
-          id: parseInt(race.series_id), // Use series_id as the integer id
+          id: `${race.series_id}_${race.start_time}`, // Create a unique identifier
           title: race.title,
           start_time: race.start_time,
           track_name: race.track_name,
           state: race.state,
           license_level: race.license_level,
-          car_class: parseInt(race.car_class) || 0,
-          number_of_racers: parseInt(race.number_of_racers) || 0,
-          series_id: parseInt(race.series_id)
+          car_class: race.car_class,
+          number_of_racers: race.number_of_racers,
+          series_id: race.series_id
         })), {
           onConflict: 'id',
           update: [
-            'title',
-            'start_time',
             'track_name',
             'state',
             'license_level',
