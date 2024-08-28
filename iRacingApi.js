@@ -193,7 +193,15 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
 
   const processedRaces = raceData.map(race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
-    const track = trackData.find(t => t.track_id === race.track.track_id);
+    
+    // Safely access track data
+    let track = null;
+    if (race.track && race.track.track_id) {
+      track = trackData.find(t => t.track_id === race.track.track_id);
+    } else if (race.track_id) {
+      track = trackData.find(t => t.track_id === race.track_id);
+    }
+    
     const state = calculateRaceState(race.start_time);
 
     let availableCars = [];
@@ -255,7 +263,6 @@ async function fetchRacesFromIRacingAPI() {
     console.log('Fetching series data');
     const seriesData = await fetchSeriesData();
     console.log(`Fetched ${seriesData.length} series`);
-    console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
 
     console.log('Fetching track data');
     const trackData = await fetchTrackData();
@@ -267,6 +274,11 @@ async function fetchRacesFromIRacingAPI() {
 
     console.log('Processing race data');
     console.log(`Total races to process: ${raceGuide.sessions.length}`);
+
+    if (!Array.isArray(raceGuide.sessions)) {
+      console.error('Race guide sessions is not an array:', raceGuide.sessions);
+      throw new Error('Invalid race guide data structure');
+    }
 
     const officialRaces = await processRaceData(raceGuide.sessions, seriesData, trackData, carData);
 
