@@ -193,7 +193,9 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
 
   const processedRaces = raceData.map(race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
-    const track = trackData.find(t => t.track_id === race.track.track_id);
+    const track = race.track && race.track.track_id 
+      ? trackData.find(t => t.track_id === race.track.track_id)
+      : null;
     const state = calculateRaceState(race.start_time);
 
     const availableCars = series ? series.car_class_ids.flatMap(classId => 
@@ -203,7 +205,7 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
     const processedRace = {
       title: series ? series.series_name : 'Unknown Series',
       start_time: race.start_time,
-      track_name: track ? track.track_name : 'Unknown Track',
+      track_name: track ? track.track_name : (race.track ? race.track.track_name : 'Unknown Track'),
       state: state,
       license_level: series ? series.allowed_licenses[0].group_name : 'Unknown',
       car_class: series ? series.category_id : 0,
