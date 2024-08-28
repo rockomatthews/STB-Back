@@ -235,20 +235,19 @@ async function fetchRacesFromIRacingAPI() {
 async function getOfficialRaces(userId, page = 1, limit = 10) {
   try {
     console.log(`Getting official races: page ${page}, limit ${limit}`);
-    
+
     page = Math.max(1, page);
 
     console.log('Fetching fresh race data from iRacing API');
     const freshRaces = await fetchRacesFromIRacingAPI();
-    
+
     if (freshRaces.length > 0) {
       console.log('Updating Supabase with new race data');
       console.log('Sample race data being upserted:', JSON.stringify(freshRaces[0], null, 2));
-      
+
       const { data: upsertData, error: upsertError } = await supabase
         .from('official_races')
         .upsert(freshRaces.map(race => ({
-          id: `${race.series_id}_${race.start_time}`, // Create a unique identifier
           title: race.title,
           start_time: race.start_time,
           track_name: race.track_name,
@@ -258,14 +257,8 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
           number_of_racers: race.number_of_racers,
           series_id: race.series_id
         })), {
-          onConflict: 'id',
-          update: [
-            'track_name',
-            'state',
-            'license_level',
-            'car_class',
-            'number_of_racers'
-          ]
+          onConflict: 'series_id,start_time',
+          ignoreDuplicates: false
         });
 
       if (upsertError) {
@@ -305,7 +298,6 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
     throw error;
   }
 }
-
 async function searchIRacingName(name) {
   try {
     const cookies = await cookieJar.getCookies(BASE_URL);
