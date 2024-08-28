@@ -155,11 +155,12 @@ async function fetchTrackData() {
 }
 
 async function processRaceData(raceData, seriesData, trackData) {
+  console.log('Processing race data...');
   console.log('Sample raw race data:', JSON.stringify(raceData[0], null, 2));
   console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
   console.log('Sample track data:', JSON.stringify(trackData[0], null, 2));
 
-  return raceData.map(race => {
+  const processedRaces = raceData.map(race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
     const track = race.track && race.track.track_id 
       ? trackData.find(t => t.track_id === race.track.track_id)
@@ -172,20 +173,26 @@ async function processRaceData(raceData, seriesData, trackData) {
       track_name: track ? track.track_name : 'Unknown Track',
       state: state,
       license_level: series ? series.allowed_licenses[0].group_name : 'Unknown',
-      car_class: series ? series.category_id : 0, // Use category_id instead of category
+      car_class: series ? series.category_id : 0,
       number_of_racers: race.entry_count || 0,
       series_id: race.series_id
     };
 
     console.log('Processed race:', JSON.stringify(processedRace, null, 2));
     return processedRace;
-  }).filter(race => race.state === 'Qualifying' || race.state === 'Practice')
+  });
+
+  const filteredRaces = processedRaces
+    .filter(race => race.state === 'Qualifying' || race.state === 'Practice')
     .sort((a, b) => {
       if (a.state === b.state) {
         return new Date(a.start_time) - new Date(b.start_time);
       }
       return a.state === 'Qualifying' ? -1 : 1;
     });
+
+  console.log(`Processed and filtered ${filteredRaces.length} races`);
+  return filteredRaces;
 }
 
 async function fetchRacesFromIRacingAPI() {
@@ -269,26 +276,16 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
       }
     }
 
-    console.log('Fetching races from Supabase');
-    const { data: races, error: fetchError, count } = await supabase
-      .from('official_races')
-      .select('*', { count: 'exact' })
-      .or('state.eq.Qualifying,state.eq.Practice')
-      .order('state', { ascending: true })
-      .order('start_time', { ascending: true })
-      .range((page - 1) * limit, page * limit - 1);
+    // Use the freshly fetched races instead of querying Supabase again
+    const totalRaces = freshRaces.length;
+    const paginatedRaces = freshRaces.slice((page - 1) * limit, page * limit);
 
-    if (fetchError) {
-      console.error('Error fetching races from Supabase:', fetchError);
-      throw fetchError;
-    }
-
-    console.log(`Fetched ${races ? races.length : 0} races, total count: ${count || 0}`);
-    console.log('Sample race data from Supabase:', JSON.stringify(races[0], null, 2));
+    console.log(`Returning ${paginatedRaces.length} races, total count: ${totalRaces}`);
+    console.log('Sample race data:', JSON.stringify(paginatedRaces[0], null, 2));
 
     return {
-      races: races || [],
-      total: count || 0,
+      races: paginatedRaces,
+      total: totalRaces,
       page: page,
       limit: limit
     };
@@ -298,6 +295,7 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
     throw error;
   }
 }
+
 async function searchIRacingName(name) {
   try {
     const cookies = await cookieJar.getCookies(BASE_URL);

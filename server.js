@@ -124,20 +124,18 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    
-    // Get user ID from query parameter, cookie, or generate a temporary one
+
     let userId = req.query.userId || req.cookies.userId;
-    
+
     if (!userId) {
-      // If no user ID is provided, generate a temporary one
       userId = 'temp_' + Math.random().toString(36).substr(2, 9);
-      // Set a cookie with the temporary ID
-      res.cookie('userId', userId, { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }); // 24 hours
+      res.cookie('userId', userId, { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 });
     }
 
     console.log(`Fetching official races for user ${userId}: page ${page}, limit ${limit}`);
     const races = await getOfficialRaces(userId, page, limit);
     console.log(`Successfully fetched ${races.races.length} races`);
+    console.log('Full response:', JSON.stringify(races, null, 2));
     res.json(races);
   } catch (error) {
     console.error('Error fetching official races:', error);
