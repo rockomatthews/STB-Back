@@ -154,6 +154,27 @@ async function fetchTrackData() {
   }
 }
 
+async function fetchCarData() {
+  try {
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    const response = await instance.get(`${BASE_URL}/data/car/get`, {
+      headers: { 'Cookie': cookieString }
+    });
+
+    if (response.data && response.data.link) {
+      const carDataResponse = await instance.get(response.data.link);
+      return carDataResponse.data;
+    } else {
+      throw new Error('Invalid car data response from iRacing API');
+    }
+  } catch (error) {
+    console.error('Error fetching car data:', error.message);
+    throw error;
+  }
+}
+
 const carClassMap = {
   1: 'Oval',
   2: 'Unknown',
@@ -163,29 +184,33 @@ const carClassMap = {
   6: 'Formula'
 };
 
-async function processRaceData(raceData, seriesData, trackData) {
+async function processRaceData(raceData, seriesData, trackData, carData) {
   console.log('Processing race data...');
   console.log('Sample raw race data:', JSON.stringify(raceData[0], null, 2));
   console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
   console.log('Sample track data:', JSON.stringify(trackData[0], null, 2));
+  console.log('Sample car data:', JSON.stringify(carData[0], null, 2));
 
   const processedRaces = raceData.map(race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
-    const track = race.track && race.track.track_id 
-      ? trackData.find(t => t.track_id === race.track.track_id)
-      : null;
+    const track = trackData.find(t => t.track_id === race.track.track_id);
     const state = calculateRaceState(race.start_time);
+
+    const availableCars = series ? series.car_class_ids.flatMap(classId => 
+      carData.filter(car => car.car_class_id === classId)
+    ).map(car => car.car_name) : [];
 
     const processedRace = {
       title: series ? series.series_name : 'Unknown Series',
       start_time: race.start_time,
-      track_name: track ? track.track_name : (race.track ? race.track.track_name : 'Unknown Track'),
+      track_name: track ? track.track_name : 'Unknown Track',
       state: state,
       license_level: series ? series.allowed_licenses[0].group_name : 'Unknown',
       car_class: series ? series.category_id : 0,
       car_class_name: carClassMap[series ? series.category_id : 0] || 'Unknown',
       number_of_racers: race.entry_count || 0,
-      series_id: race.series_id
+      series_id: race.series_id,
+      available_cars: availableCars
     };
 
     console.log('Processed race:', JSON.stringify(processedRace, null, 2));
@@ -232,10 +257,14 @@ async function fetchRacesFromIRacingAPI() {
     const trackData = await fetchTrackData();
     console.log(`Fetched ${trackData.length} tracks`);
 
+    console.log('Fetching car data');
+    const carData = await fetchCarData();
+    console.log(`Fetched ${carData.length} cars`);
+
     console.log('Processing race data');
     console.log(`Total races to process: ${raceGuide.sessions.length}`);
-    
-    const officialRaces = await processRaceData(raceGuide.sessions, seriesData, trackData);
+
+    const officialRaces = await processRaceData(raceGuide.sessions, seriesData, trackData, carData);
 
     console.log(`Processed ${officialRaces.length} official races`);
     return officialRaces;
@@ -271,8 +300,10 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
           state: race.state,
           license_level: race.license_level,
           car_class: race.car_class,
+          car_class_name: race.car_class_name,
           number_of_racers: race.number_of_racers,
-          series_id: race.series_id
+          series_id: race.series_id,
+          available_cars: race.available_cars
         })), {
           onConflict: 'series_id,start_time',
           ignoreDuplicates: false
