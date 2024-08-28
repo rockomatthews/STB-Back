@@ -135,19 +135,12 @@ async function fetchSeriesData() {
 
 async function fetchTrackData() {
   try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+    const { data, error } = await supabase
+      .from('tracks')
+      .select('track_id, track_name');
 
-    const response = await instance.get(`${BASE_URL}/data/track/get`, {
-      headers: { 'Cookie': cookieString }
-    });
-
-    if (response.data && response.data.link) {
-      const trackDataResponse = await instance.get(response.data.link);
-      return trackDataResponse.data;
-    } else {
-      throw new Error('Invalid track data response from iRacing API');
-    }
+    if (error) throw error;
+    return data;
   } catch (error) {
     console.error('Error fetching track data:', error.message);
     throw error;
@@ -193,9 +186,7 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
 
   const processedRaces = raceData.map(race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
-    const track = race.track && race.track.track_id 
-      ? trackData.find(t => t.track_id === race.track.track_id)
-      : null;
+    const track = trackData.find(t => t.track_id === race.track.track_id);
     const state = calculateRaceState(race.start_time);
 
     let availableCars = [];
@@ -208,7 +199,7 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
     const processedRace = {
       title: series ? series.series_name : 'Unknown Series',
       start_time: race.start_time,
-      track_name: track ? track.track_name : (race.track ? race.track.track_name : 'Unknown Track'),
+      track_name: track ? track.track_name : 'Unknown Track',
       state: state,
       license_level: series ? series.allowed_licenses[0].group_name : 'Unknown',
       car_class: series ? series.category_id : 0,
@@ -308,8 +299,8 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
           car_class: race.car_class,
           car_class_name: race.car_class_name,
           number_of_racers: race.number_of_racers,
-          series_id: race.series_id,
-          available_cars: race.available_cars
+          series_id: race.series_id
+          // Note: available_cars is removed from here as it's not in the official_races table
         })), {
           onConflict: 'series_id,start_time',
           ignoreDuplicates: false
