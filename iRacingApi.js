@@ -198,9 +198,12 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
       : null;
     const state = calculateRaceState(race.start_time);
 
-    const availableCars = series ? series.car_class_ids.flatMap(classId => 
-      carData.filter(car => car.car_class_id === classId)
-    ).map(car => car.car_name) : [];
+    let availableCars = [];
+    if (series && series.car_class_ids) {
+      availableCars = series.car_class_ids.flatMap(classId => 
+        carData.filter(car => car.car_class_id === classId)
+      ).map(car => car.car_name);
+    }
 
     const processedRace = {
       title: series ? series.series_name : 'Unknown Series',
@@ -254,6 +257,7 @@ async function fetchRacesFromIRacingAPI() {
     console.log('Fetching series data');
     const seriesData = await fetchSeriesData();
     console.log(`Fetched ${seriesData.length} series`);
+    console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
 
     console.log('Fetching track data');
     const trackData = await fetchTrackData();
