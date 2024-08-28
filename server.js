@@ -21,7 +21,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
-app.use(cookieParser()); // Add cookie-parser middleware
+app.use(cookieParser());
 
 const PORT = process.env.PORT || 3001;
 
@@ -54,73 +54,13 @@ async function attemptLogin(attempts = 0) {
   }
 }
 
-app.get('/api/test-races', async (req, res) => {
-  console.log('Test races endpoint hit');
-  try {
-    const races = await getOfficialRaces('test_user', 1, 10);
-    console.log('Races retrieved:', JSON.stringify(races, null, 2));
-    res.json(races);
-  } catch (error) {
-    console.error('Error in test races endpoint:', error);
-    res.status(500).json({ error: 'An error occurred while fetching races' });
-  }
-});
-
-app.get('/api/test-supabase', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('official_races').select('count').limit(1);
-    if (error) throw error;
-    res.json({ success: true, message: 'Supabase connection successful', data });
-  } catch (error) {
-    console.error('Supabase connection test failed:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-const checkAuth = async (req, res, next) => {
-  try {
-    const isAuthenticated = await verifyAuth();
-    if (isAuthenticated) {
-      console.log('User is authenticated');
-    } else {
-      console.log('User is not authenticated, proceeding with limited functionality');
-    }
-    next(); // Always proceed to the next middleware
-  } catch (error) {
-    console.error('Error in checkAuth middleware:', error);
-    next(); // Proceed even if there's an error
-  }
-};
-
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
-// Login endpoint
-app.post('/api/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
-    const loginSuccess = await login(email, password);
-    if (loginSuccess) {
-      res.json({ success: true, message: 'Login successful' });
-    } else {
-      res.status(401).json({ success: false, message: 'Login failed' });
-    }
-  } catch (error) {
-    console.error('Error in login endpoint:', error);
-    res.status(500).json({ 
-      error: 'An error occurred during login', 
-      details: error.message
-    });
-  }
-});
-
 // Endpoint to get official races with pagination
-app.get('/api/official-races', checkAuth, async (req, res) => {
+app.get('/api/official-races', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
@@ -135,7 +75,6 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
     console.log(`Fetching official races for user ${userId}: page ${page}, limit ${limit}`);
     const races = await getOfficialRaces(userId, page, limit);
     console.log(`Successfully fetched ${races.races.length} races`);
-    console.log('Full response:', JSON.stringify(races, null, 2));
     res.json(races);
   } catch (error) {
     console.error('Error fetching official races:', error);
@@ -147,7 +86,7 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
 });
 
 // Endpoint to search for an iRacing name
-app.get('/api/search-iracing-name', checkAuth, async (req, res) => {
+app.get('/api/search-iracing-name', async (req, res) => {
   try {
     const { name } = req.query;
     if (!name) {

@@ -135,12 +135,19 @@ async function fetchSeriesData() {
 
 async function fetchTrackData() {
   try {
-    const { data, error } = await supabase
-      .from('tracks')
-      .select('track_id, track_name');
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
-    if (error) throw error;
-    return data;
+    const response = await instance.get(`${BASE_URL}/data/track/get`, {
+      headers: { 'Cookie': cookieString }
+    });
+
+    if (response.data && response.data.link) {
+      const trackDataResponse = await instance.get(response.data.link);
+      return trackDataResponse.data;
+    } else {
+      throw new Error('Invalid track data response from iRacing API');
+    }
   } catch (error) {
     console.error('Error fetching track data:', error.message);
     throw error;
@@ -288,29 +295,42 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
       console.log('Updating Supabase with new race data');
       console.log('Sample race data being upserted:', JSON.stringify(freshRaces[0], null, 2));
 
-      const { data: upsertData, error: upsertError } = await supabase
-        .from('official_races')
-        .upsert(freshRaces.map(race => ({
-          title: race.title,
-          start_time: race.start_time,
-          track_name: race.track_name,
-          state: race.state,
-          license_level: race.license_level,
-          car_class: race.car_class,
-          car_class_name: race.car_class_name,
-          number_of_racers: race.number_of_racers,
-          series_id: race.series_id
-          // Note: available_cars is removed from here as it's not in the official_races table
-        })), {
-          onConflict: 'series_id,start_time',
-          ignoreDuplicates: false
-        });
+      for (const race of freshRaces) {
+        const { data: upsertData, error: upsertError } = await supabase
+          .from('official_races')
+          .upsert({
+            title: race.title,
+            start_time: race.start_time,
+            track_name: race.track_name,
+            state: race.state,
+            license_level: race.license_level,
+            car_class: race.car_class,
+            number_of_racers: race.number_of_racers,
+            series_id: race.series_id
+          }, {
+            onConflict: 'series_id,start_time',
+            ignoreDuplicates: false
+          });
 
-      if (upsertError) {
-        console.error('Error upserting races:', upsertError);
-      } else {
-        console.log(`Successfully upserted ${freshRaces.length} races to Supabase`);
-        console.log('Upsert response data:', JSON.stringify(upsertData, null, 2));
+        if (upsertError) {
+          console.error('Error upserting race:', upsertError);
+        } else {
+          console.log(`Successfully upserted race: ${race.title}`);
+          
+          // Insert available cars
+          for (const car of race.available_cars) {
+            const { data: carData, error: carError } = await supabase
+              .from('available_cars')
+              .upsert({
+                race_id: upsertData[0].id,
+                car_name: car
+              });
+
+            if (carError) {
+              console.error('Error inserting available car:', carError);
+            }
+          }
+        }
       }
     }
 
@@ -392,6 +412,32 @@ async function getTotalRacesCount() {
   }
   return count;
 }
+
+// Periodic re-authentication
+const RE_AUTH_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
+async function periodicReAuth() {
+  try {
+    const isAuthenticated = await verifyAuth();
+    if (!isAuthenticated) {
+      console.log('Session expired. Attempting to re-authenticate...');
+      await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
+    }
+  } catch (error) {
+    console.error('Error during periodic re-authentication:', error);
+  }
+}
+
+setInterval(periodicReAuth, RE_AUTH_INTERVAL);
+
+// Initialize authentication on module load
+(async () => {
+  try {
+    await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
+  } catch (error) {
+    console.error('Initial authentication failed:', error);
+  }
+})();
 
 export {
   login,
