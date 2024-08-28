@@ -154,6 +154,15 @@ async function fetchTrackData() {
   }
 }
 
+const carClassMap = {
+  1: 'Oval',
+  2: 'Unknown',
+  3: 'Dirt Oval',
+  4: 'Dirt Road',
+  5: 'Sports Car',
+  6: 'Formula'
+};
+
 async function processRaceData(raceData, seriesData, trackData) {
   console.log('Processing race data...');
   console.log('Sample raw race data:', JSON.stringify(raceData[0], null, 2));
@@ -170,10 +179,11 @@ async function processRaceData(raceData, seriesData, trackData) {
     const processedRace = {
       title: series ? series.series_name : 'Unknown Series',
       start_time: race.start_time,
-      track_name: track ? track.track_name : 'Unknown Track',
+      track_name: track ? track.track_name : (race.track ? race.track.track_name : 'Unknown Track'),
       state: state,
       license_level: series ? series.allowed_licenses[0].group_name : 'Unknown',
       car_class: series ? series.category_id : 0,
+      car_class_name: carClassMap[series ? series.category_id : 0] || 'Unknown',
       number_of_racers: race.entry_count || 0,
       series_id: race.series_id
     };
