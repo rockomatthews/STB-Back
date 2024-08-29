@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import crypto from 'crypto';
 import https from 'https';
@@ -193,8 +194,8 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
 
   const processedRaces = raceData.map(race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
-
-    // Extract track name
+    
+    // Handle potential undefined track object
     let trackName = 'Unknown Track';
     if (race.track && race.track.track_id) {
       const track = trackData.find(t => t.track_id === race.track.track_id);
@@ -202,10 +203,9 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
         trackName = track.track_name;
       }
     }
-
+    
     const state = calculateRaceState(race.start_time);
 
-    // Extract available cars
     let availableCars = [];
     if (series && series.car_class_ids) {
       availableCars = series.car_class_ids.flatMap(classId => 
@@ -333,7 +333,7 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
           console.error('Error upserting race:', upsertError);
         } else {
           console.log(`Successfully upserted race: ${race.title}`);
-
+          
           // Insert available cars
           for (const car of race.available_cars) {
             const { data: carData, error: carError } = await supabase
@@ -367,53 +367,6 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
   } catch (error) {
     console.error('Error in getOfficialRaces:', error.message);
     console.error('Error stack:', error.stack);
-    throw error;
-  }
-}
-
-async function searchIRacingName(name) {
-  try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
-
-    const response = await instance.get(`${BASE_URL}/data/lookup/drivers`, {
-      params: {
-        search_term: name,
-        lowerbound: 1,
-        upperbound: 25
-      },
-      headers: {
-        'Cookie': cookieString
-      }
-    });
-
-    if (response.data && response.data.link) {
-      const driverDataResponse = await instance.get(response.data.link);
-      const drivers = Array.isArray(driverDataResponse.data) ? driverDataResponse.data : [];
-
-      if (drivers.length > 0) {
-        const matchingDriver = drivers.find(driver => 
-          driver.display_name.toLowerCase() === name.toLowerCase() ||
-          driver.display_name.toLowerCase().includes(name.toLowerCase())
-        );
-
-        if (matchingDriver) {
-          return {
-            exists: true,
-            name: matchingDriver.display_name,
-            id: matchingDriver.cust_id
-          };
-        }
-      }
-    }
-
-    return { exists: false };
-  } catch (error) {
-    console.error('Error searching for iRacing name:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
-    }
     throw error;
   }
 }
