@@ -178,21 +178,28 @@ async function fetchCarData() {
 
 async function getRacers(subsessionId) {
   try {
+    console.log('Getting racers for subsessionId:', subsessionId); // Add this log
+
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(function(cookie) {
       return cookie.key + '=' + cookie.value;
     }).join('; ');
 
+    console.log('Sending request to iRacing API'); // Add this log
     const response = await instance.get(BASE_URL + '/data/results/get', {
       params: { subsession_id: subsessionId },
       headers: { 'Cookie': cookieString }
     });
 
+    console.log('Received response from iRacing API'); // Add this log
+
     if (response.data && response.data.link) {
+      console.log('Fetching results data from link'); // Add this log
       const resultsDataResponse = await instance.get(response.data.link);
       const resultsData = resultsDataResponse.data;
 
       if (resultsData && resultsData.session_results && resultsData.session_results[0] && resultsData.session_results[0].results) {
+        console.log('Processing racers data'); // Add this log
         return resultsData.session_results[0].results.map(function(racer) {
           return {
             id: racer.cust_id,
@@ -203,9 +210,11 @@ async function getRacers(subsessionId) {
           };
         });
       } else {
+        console.log('No results data found for this subsession'); // Add this log
         throw new Error('No results data found for this subsession');
       }
     } else {
+      console.log('Invalid response from iRacing API'); // Add this log
       throw new Error('Invalid response from iRacing API');
     }
   } catch (error) {
