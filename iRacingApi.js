@@ -179,9 +179,11 @@ async function fetchCarData() {
 async function getRacers(subsessionId) {
   try {
     const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+    const cookieString = cookies.map(function(cookie) {
+      return cookie.key + '=' + cookie.value;
+    }).join('; ');
 
-    const response = await instance.get(`${BASE_URL}/data/results/get`, {
+    const response = await instance.get(BASE_URL + '/data/results/get', {
       params: { subsession_id: subsessionId },
       headers: { 'Cookie': cookieString }
     });
@@ -190,14 +192,16 @@ async function getRacers(subsessionId) {
       const resultsDataResponse = await instance.get(response.data.link);
       const resultsData = resultsDataResponse.data;
 
-      if (resultsData && resultsData.session_results && resultsData.session_results[0].results) {
-        return resultsData.session_results[0].results.map(racer => ({
-          id: racer.cust_id,
-          name: racer.display_name,
-          starting_position: racer.starting_position,
-          finishing_position: racer.finish_position,
-          car_number: racer.car_number
-        }));
+      if (resultsData && resultsData.session_results && resultsData.session_results[0] && resultsData.session_results[0].results) {
+        return resultsData.session_results[0].results.map(function(racer) {
+          return {
+            id: racer.cust_id,
+            name: racer.display_name,
+            starting_position: racer.starting_position,
+            finishing_position: racer.finish_position,
+            car_number: racer.car_number
+          };
+        });
       } else {
         throw new Error('No results data found for this subsession');
       }

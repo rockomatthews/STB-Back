@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import { login, verifyAuth, getOfficialRaces, searchIRacingName } from './iRacingApi.js';
+import { login, verifyAuth, getOfficialRaces, searchIRacingName, getRacers } from './iRacingApi.js';
 import { createClient } from '@supabase/supabase-js';
 
 console.log('Server starting...');
@@ -57,6 +57,26 @@ async function attemptLogin(attempts = 0) {
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' });
+});
+
+app.get('/api/race-racers', async function(req, res) {
+  try {
+    const subsessionId = req.query.subsessionId;
+    if (!subsessionId) {
+      return res.status(400).json({ error: 'Subsession ID is required' });
+    }
+
+    console.log('Fetching racers for subsession ID: ' + subsessionId);
+    const racers = await getRacers(subsessionId);
+    console.log('Successfully fetched ' + racers.length + ' racers');
+    res.json(racers);
+  } catch (error) {
+    console.error('Error fetching racers:', error);
+    res.status(500).json({ 
+      error: 'An error occurred while fetching racers', 
+      details: error.message
+    });
+  }
 });
 
 // Endpoint to get official races with pagination
