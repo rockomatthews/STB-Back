@@ -506,5 +506,6 @@ export {
   verifyAuth,
   searchIRacingName,
   getOfficialRaces,
-  getTotalRacesCount
+  getTotalRacesCount,
+  getRacers
 };
