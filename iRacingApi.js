@@ -223,6 +223,46 @@ async function getRacers(subsessionId) {
   }
 }
 
+async function getDriversForSeries(seriesId) {
+  try {
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(function(cookie) {
+      return cookie.key + '=' + cookie.value;
+    }).join('; ');
+
+    console.log('Fetching drivers for series ID:', seriesId);
+
+    const response = await instance.get(BASE_URL + '/data/series/season_drivers', {
+      params: { season_id: seriesId },
+      headers: { 'Cookie': cookieString }
+    });
+
+    if (response.data && response.data.link) {
+      const driversDataResponse = await instance.get(response.data.link);
+      const driversData = driversDataResponse.data;
+
+      if (Array.isArray(driversData)) {
+        const drivers = driversData.map(function(driver) {
+          return {
+            id: driver.cust_id,
+            name: driver.display_name
+          };
+        });
+        console.log('Successfully fetched', drivers.length, 'drivers for series', seriesId);
+        return drivers;
+      } else {
+        throw new Error('Invalid drivers data format');
+      }
+    } else {
+      throw new Error('Invalid response from iRacing API');
+    }
+  } catch (error) {
+    console.error('Error fetching drivers for series:', error.message);
+    throw error;
+  }
+}
+
+
 const carClassMap = {
   1: 'Oval',
   2: 'Unknown',
@@ -509,5 +549,6 @@ export {
   searchIRacingName,
   getOfficialRaces,
   getTotalRacesCount,
-  getRacers
+  getRacers,
+  getDriversForSeries
 };

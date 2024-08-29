@@ -64,22 +64,22 @@ app.get('/api/race-racers', async function(req, res) {
     console.log('Received request for /api/race-racers');
     console.log('Query parameters:', req.query);
     
-    const subsessionId = req.query.subsessionId;
-    console.log('Extracted subsessionId:', subsessionId);
+    const seriesId = req.query.seriesId;
+    console.log('Extracted seriesId:', seriesId);
 
-    if (!subsessionId) {
-      console.log('Missing subsessionId');
-      return res.status(400).json({ error: 'Subsession ID is required' });
+    if (!seriesId) {
+      console.log('Missing seriesId');
+      return res.status(400).json({ error: 'Series ID is required' });
     }
 
-    console.log('Fetching racers for subsession ID: ' + subsessionId);
-    const racers = await getRacers(subsessionId);
-    console.log('Successfully fetched ' + racers.length + ' racers');
-    res.json(racers);
+    console.log('Fetching drivers for series ID: ' + seriesId);
+    const drivers = await getDriversForSeries(seriesId);
+    console.log('Successfully fetched ' + drivers.length + ' drivers');
+    res.json(drivers);
   } catch (error) {
-    console.error('Error fetching racers:', error);
+    console.error('Error fetching drivers:', error);
     res.status(500).json({ 
-      error: 'An error occurred while fetching racers', 
+      error: 'An error occurred while fetching drivers', 
       details: error.message,
       stack: error.stack
     });
