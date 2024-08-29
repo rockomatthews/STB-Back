@@ -112,24 +112,23 @@ async function fetchSeriesData() {
   }
 }
 
-async function fetchTrackData() {
+async function fetchTrackDataFromSupabase(trackId) {
   try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+    const { data: trackData, error } = await supabase
+      .from('tracks')
+      .select('track_name')
+      .eq('track_id', trackId)
+      .single();
 
-    const response = await instance.get(`${BASE_URL}/data/track/get`, {
-      headers: { 'Cookie': cookieString }
-    });
-
-    if (response.data && response.data.link) {
-      const trackDataResponse = await instance.get(response.data.link);
-      return trackDataResponse.data;
-    } else {
-      throw new Error('Invalid track data response from iRacing API');
+    if (error) {
+      console.error(`Error fetching track data for track ID ${trackId}:`, error.message);
+      return 'Unknown Track';
     }
+
+    return trackData.track_name || 'Unknown Track';
   } catch (error) {
-    console.error('Error fetching track data:', error.message);
-    throw error;
+    console.error('Error fetching track data from Supabase:', error.message);
+    return 'Unknown Track';
   }
 }
 
@@ -163,15 +162,12 @@ const carClassMap = {
   6: 'Formula'
 };
 
-async function processRaceData(raceData, seriesData, trackData, carData) {
-  const processedRaces = raceData.map(race => {
+async function processRaceData(raceData, seriesData, carData) {
+  const processedRaces = await Promise.all(raceData.map(async race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
 
-    let trackName = 'Unknown Track';
-    if (race.track && race.track.track_id) {
-      const track = trackData.find(t => t.track_id === race.track.track_id);
-      if (track) trackName = track.track_name;
-    }
+    // Fetch track name from Supabase using track_id
+    const trackName = await fetchTrackDataFromSupabase(race.track.track_id);
 
     const state = calculateRaceState(race.start_time);
 
@@ -194,7 +190,7 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
       series_id: race.series_id,
       available_cars: availableCars
     };
-  });
+  }));
 
   return processedRaces
     .filter(race => race.state === 'Qualifying' || race.state === 'Practice')
@@ -218,10 +214,9 @@ async function fetchRacesFromIRacingAPI() {
     const raceGuide = raceGuideDataResponse.data;
 
     const seriesData = await fetchSeriesData();
-    const trackData = await fetchTrackData();
     const carData = await fetchCarData();
 
-    return await processRaceData(raceGuide.sessions, seriesData, trackData, carData);
+    return await processRaceData(raceGuide.sessions, seriesData, carData);
   } catch (error) {
     console.error('Error fetching races from iRacing API:', error.message);
     throw error;
