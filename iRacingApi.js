@@ -237,24 +237,29 @@ async function getDriversForSeries(seriesId) {
     });
 
     if (!response.data || !response.data.link) {
+      console.log('Race guide response:', response.data);
       throw new Error('Invalid response from iRacing API for race guide');
     }
 
     const raceGuideResponse = await instance.get(response.data.link);
     const raceGuideData = raceGuideResponse.data;
 
+    console.log('Race guide data structure:', JSON.stringify(raceGuideData, null, 2));
+
     if (!raceGuideData || !raceGuideData.sessions || !Array.isArray(raceGuideData.sessions)) {
       throw new Error('Invalid race guide data structure');
     }
 
-    const relevantSessions = raceGuideData.sessions.filter(function(session) {
-      return session.series_id === parseInt(seriesId) && 
-             (session.status === 'Practice' || session.status === 'Qualifying');
+    console.log('Total sessions in race guide:', raceGuideData.sessions.length);
+
+    const seriesSessions = raceGuideData.sessions.filter(session => session.series_id === parseInt(seriesId));
+    console.log('All sessions for series ' + seriesId + ':', JSON.stringify(seriesSessions, null, 2));
+
+    const relevantSessions = seriesSessions.filter(function(session) {
+      return session.status === 'Practice' || session.status === 'Qualifying';
     });
 
-    if (relevantSessions.length === 0) {
-      throw new Error('No Practice or Qualifying sessions found for this series');
-    }
+    console.log('Relevant sessions found:', relevantSessions.length);
 
     const driverSet = new Set();
     relevantSessions.forEach(function(session) {
@@ -265,12 +270,20 @@ async function getDriversForSeries(seriesId) {
             name: driver.display_name
           }));
         });
+      } else {
+        console.log('No drivers found for session:', session.subsession_id);
       }
     });
 
     const drivers = Array.from(driverSet).map(JSON.parse);
-    console.log('Successfully fetched', drivers.length, 'unique drivers for Practice/Qualifying sessions in series', seriesId);
-    return drivers;
+    console.log('Fetched', drivers.length, 'unique drivers for Practice/Qualifying sessions in series', seriesId);
+
+    return {
+      drivers: drivers,
+      totalSessions: seriesSessions.length,
+      relevantSessions: relevantSessions.length,
+      allSessionStates: seriesSessions.map(session => session.status)
+    };
   } catch (error) {
     console.error('Error fetching drivers for series:', error.message);
     throw error;

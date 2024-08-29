@@ -71,9 +71,22 @@ app.get('/api/race-racers', async function(req, res) {
     }
 
     console.log('Fetching drivers for series ID: ' + seriesId);
-    const drivers = await getDriversForSeries(seriesId);
-    console.log('Successfully fetched ' + drivers.length + ' drivers');
-    res.json(drivers);
+    const result = await getDriversForSeries(seriesId);
+    console.log('Fetched data:', JSON.stringify(result, null, 2));
+
+    if (result.drivers.length === 0) {
+      return res.status(404).json({
+        error: 'No drivers found',
+        details: 'No Practice or Qualifying sessions found for this series',
+        sessionInfo: {
+          totalSessions: result.totalSessions,
+          relevantSessions: result.relevantSessions,
+          allSessionStates: result.allSessionStates
+        }
+      });
+    }
+
+    res.json(result);
   } catch (error) {
     console.error('Error fetching drivers:', error);
     res.status(500).json({ 
