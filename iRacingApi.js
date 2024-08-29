@@ -194,12 +194,13 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
   const processedRaces = raceData.map(race => {
     const series = seriesData.find(s => s.series_id === race.series_id);
     
-    // Safely access track data
-    let track = null;
+    // Handle potential undefined track object
+    let trackName = 'Unknown Track';
     if (race.track && race.track.track_id) {
-      track = trackData.find(t => t.track_id === race.track.track_id);
-    } else if (race.track_id) {
-      track = trackData.find(t => t.track_id === race.track_id);
+      const track = trackData.find(t => t.track_id === race.track.track_id);
+      if (track) {
+        trackName = track.track_name;
+      }
     }
     
     const state = calculateRaceState(race.start_time);
@@ -211,10 +212,15 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
       ).map(car => car.car_name);
     }
 
+    // Log information about available cars for debugging
+    console.log(`Series ${series ? series.series_name : 'Unknown'} (ID: ${race.series_id}):`);
+    console.log('Car class IDs:', series ? series.car_class_ids : 'N/A');
+    console.log('Available cars:', availableCars);
+
     const processedRace = {
       title: series ? series.series_name : 'Unknown Series',
       start_time: race.start_time,
-      track_name: track ? track.track_name : 'Unknown Track',
+      track_name: trackName,
       state: state,
       license_level: series ? series.allowed_licenses[0].group_name : 'Unknown',
       car_class: series ? series.category_id : 0,
@@ -263,22 +269,20 @@ async function fetchRacesFromIRacingAPI() {
     console.log('Fetching series data');
     const seriesData = await fetchSeriesData();
     console.log(`Fetched ${seriesData.length} series`);
+    console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
 
     console.log('Fetching track data');
     const trackData = await fetchTrackData();
     console.log(`Fetched ${trackData.length} tracks`);
+    console.log('Sample track data:', JSON.stringify(trackData[0], null, 2));
 
     console.log('Fetching car data');
     const carData = await fetchCarData();
     console.log(`Fetched ${carData.length} cars`);
+    console.log('Sample car data:', JSON.stringify(carData[0], null, 2));
 
     console.log('Processing race data');
     console.log(`Total races to process: ${raceGuide.sessions.length}`);
-
-    if (!Array.isArray(raceGuide.sessions)) {
-      console.error('Race guide sessions is not an array:', raceGuide.sessions);
-      throw new Error('Invalid race guide data structure');
-    }
 
     const officialRaces = await processRaceData(raceGuide.sessions, seriesData, trackData, carData);
 
