@@ -2,10 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import { login, verifyAuth, getOfficialRaces, searchIRacingName, getRacers } from './iRacingApi.js';
+import { login, verifyAuth, getOfficialRaces, searchIRacingName, getDriversForSeries } from './iRacingApi.js';
 import { createClient } from '@supabase/supabase-js';
-
-console.log('Server starting...');
 
 dotenv.config();
 
