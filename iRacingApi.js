@@ -176,6 +176,40 @@ async function fetchCarData() {
   }
 }
 
+async function getRacers(subsessionId) {
+  try {
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    const response = await instance.get(`${BASE_URL}/data/results/get`, {
+      params: { subsession_id: subsessionId },
+      headers: { 'Cookie': cookieString }
+    });
+
+    if (response.data && response.data.link) {
+      const resultsDataResponse = await instance.get(response.data.link);
+      const resultsData = resultsDataResponse.data;
+
+      if (resultsData && resultsData.session_results && resultsData.session_results[0].results) {
+        return resultsData.session_results[0].results.map(racer => ({
+          id: racer.cust_id,
+          name: racer.display_name,
+          starting_position: racer.starting_position,
+          finishing_position: racer.finish_position,
+          car_number: racer.car_number
+        }));
+      } else {
+        throw new Error('No results data found for this subsession');
+      }
+    } else {
+      throw new Error('Invalid response from iRacing API');
+    }
+  } catch (error) {
+    console.error('Error fetching racers:', error.message);
+    throw error;
+  }
+}
+
 const carClassMap = {
   1: 'Oval',
   2: 'Unknown',
@@ -192,13 +226,16 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
   console.log('Sample track data:', JSON.stringify(trackData[0], null, 2));
   console.log('Sample car data:', JSON.stringify(carData[0], null, 2));
 
-  const processedRaces = raceData.map(race => {
-    const series = seriesData.find(s => s.series_id === race.series_id);
+  const processedRaces = raceData.map(function(race) {
+    const series = seriesData.find(function(s) {
+      return s.series_id === race.series_id;
+    });
     
-    // Handle potential undefined track object
     let trackName = 'Unknown Track';
     if (race.track && race.track.track_id) {
-      const track = trackData.find(t => t.track_id === race.track.track_id);
+      const track = trackData.find(function(t) {
+        return t.track_id === race.track.track_id;
+      });
       if (track) {
         trackName = track.track_name;
       }
@@ -208,13 +245,16 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
 
     let availableCars = [];
     if (series && series.car_class_ids) {
-      availableCars = series.car_class_ids.flatMap(classId => 
-        carData.filter(car => car.car_class_id === classId)
-      ).map(car => car.car_name);
+      availableCars = series.car_class_ids.flatMap(function(classId) {
+        return carData.filter(function(car) {
+          return car.car_class_id === classId;
+        });
+      }).map(function(car) {
+        return car.car_name;
+      });
     }
 
-    // Log information about available cars for debugging
-    console.log(`Series ${series ? series.series_name : 'Unknown'} (ID: ${race.series_id}):`);
+    console.log('Series ' + (series ? series.series_name : 'Unknown') + ' (ID: ' + race.series_id + '):');
     console.log('Car class IDs:', series ? series.car_class_ids : 'N/A');
     console.log('Available cars:', availableCars);
 
@@ -228,23 +268,24 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
       car_class_name: carClassMap[series ? series.category_id : 0] || 'Unknown',
       number_of_racers: race.entry_count || 0,
       series_id: race.series_id,
-      available_cars: availableCars
+      available_cars: availableCars,
+      subsession_id: race.subsession_id
     };
 
     console.log('Processed race:', JSON.stringify(processedRace, null, 2));
     return processedRace;
   });
 
-  const filteredRaces = processedRaces
-    .filter(race => race.state === 'Qualifying' || race.state === 'Practice')
-    .sort((a, b) => {
-      if (a.state === b.state) {
-        return new Date(a.start_time) - new Date(b.start_time);
-      }
-      return a.state === 'Qualifying' ? -1 : 1;
-    });
+  const filteredRaces = processedRaces.filter(function(race) {
+    return race.state === 'Qualifying' || race.state === 'Practice';
+  }).sort(function(a, b) {
+    if (a.state === b.state) {
+      return new Date(a.start_time) - new Date(b.start_time);
+    }
+    return a.state === 'Qualifying' ? -1 : 1;
+  });
 
-  console.log(`Processed and filtered ${filteredRaces.length} races`);
+  console.log('Processed and filtered ' + filteredRaces.length + ' races');
   return filteredRaces;
 }
 
