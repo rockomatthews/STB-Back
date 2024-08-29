@@ -230,32 +230,71 @@ async function getDriversForSeries(seriesId) {
       return cookie.key + '=' + cookie.value;
     }).join('; ');
 
-    console.log('Fetching drivers for series ID:', seriesId);
+    console.log('Fetching current season information for series ID:', seriesId);
 
-    const response = await instance.get(BASE_URL + '/data/series/season_drivers', {
-      params: { season_id: seriesId },
+    // First, get the current season information
+    const seasonsResponse = await instance.get(BASE_URL + '/data/series/seasons', {
       headers: { 'Cookie': cookieString }
     });
 
-    if (response.data && response.data.link) {
-      const driversDataResponse = await instance.get(response.data.link);
-      const driversData = driversDataResponse.data;
+    if (!seasonsResponse.data || !seasonsResponse.data.link) {
+      throw new Error('Invalid response from iRacing API for seasons data');
+    }
 
-      if (Array.isArray(driversData)) {
-        const drivers = driversData.map(function(driver) {
-          return {
+    const seasonsDataResponse = await instance.get(seasonsResponse.data.link);
+    const seasonsData = seasonsDataResponse.data;
+
+    const currentSeason = seasonsData.find(function(season) {
+      return season.series_id === parseInt(seriesId) && season.active === true;
+    });
+
+    if (!currentSeason) {
+      throw new Error('No active season found for the specified series');
+    }
+
+    console.log('Fetching upcoming sessions for series ID:', seriesId);
+
+    const currentDate = new Date();
+    const oneDayLater = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
+
+    // Now, get upcoming sessions
+    const response = await instance.get(BASE_URL + '/data/results/search_series', {
+      params: {
+        season_year: currentSeason.season_year,
+        season_quarter: currentSeason.season_quarter,
+        series_id: seriesId,
+        start_range_begin: currentDate.toISOString(),
+        start_range_end: oneDayLater.toISOString()
+      },
+      headers: { 'Cookie': cookieString }
+    });
+
+    if (!response.data || !response.data.link) {
+      throw new Error('Invalid response from iRacing API for upcoming sessions');
+    }
+
+    const sessionsDataResponse = await instance.get(response.data.link);
+    const sessionsData = sessionsDataResponse.data;
+
+    if (!Array.isArray(sessionsData) || sessionsData.length === 0) {
+      throw new Error('No upcoming sessions found for this series in the next 24 hours');
+    }
+
+    const driverSet = new Set();
+    sessionsData.forEach(function(session) {
+      if (session.session_drivers && Array.isArray(session.session_drivers)) {
+        session.session_drivers.forEach(function(driver) {
+          driverSet.add(JSON.stringify({
             id: driver.cust_id,
             name: driver.display_name
-          };
+          }));
         });
-        console.log('Successfully fetched', drivers.length, 'drivers for series', seriesId);
-        return drivers;
-      } else {
-        throw new Error('Invalid drivers data format');
       }
-    } else {
-      throw new Error('Invalid response from iRacing API');
-    }
+    });
+
+    const drivers = Array.from(driverSet).map(JSON.parse);
+    console.log('Successfully fetched', drivers.length, 'unique drivers for upcoming sessions in series', seriesId);
+    return drivers;
   } catch (error) {
     console.error('Error fetching drivers for series:', error.message);
     throw error;
