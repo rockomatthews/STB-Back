@@ -252,11 +252,14 @@ async function getDriversForSeries(seriesId) {
 
     console.log('Total sessions in race guide:', raceGuideData.sessions.length);
 
-    const seriesSessions = raceGuideData.sessions.filter(session => session.series_id === parseInt(seriesId));
+    const seriesSessions = raceGuideData.sessions.filter(function(session) {
+      return session.series_id === parseInt(seriesId);
+    });
     console.log('All sessions for series ' + seriesId + ':', JSON.stringify(seriesSessions, null, 2));
 
     const relevantSessions = seriesSessions.filter(function(session) {
-      return session.status === 'Practice' || session.status === 'Qualifying';
+      const raceState = calculateRaceState(session.start_time);
+      return raceState === 'Practice' || raceState === 'Qualifying';
     });
 
     console.log('Relevant sessions found:', relevantSessions.length);
@@ -275,14 +278,29 @@ async function getDriversForSeries(seriesId) {
       }
     });
 
-    const drivers = Array.from(driverSet).map(JSON.parse);
+    const drivers = Array.from(driverSet).map(function(driverString) {
+      return JSON.parse(driverString);
+    });
     console.log('Fetched', drivers.length, 'unique drivers for Practice/Qualifying sessions in series', seriesId);
+
+    const sessionsInfo = relevantSessions.map(function(session) {
+      return {
+        season_id: session.season_id,
+        start_time: session.start_time,
+        end_time: session.end_time,
+        entry_count: session.entry_count,
+        state: calculateRaceState(session.start_time)
+      };
+    });
 
     return {
       drivers: drivers,
+      sessions: sessionsInfo,
       totalSessions: seriesSessions.length,
       relevantSessions: relevantSessions.length,
-      allSessionStates: seriesSessions.map(session => session.status)
+      allSessionStates: seriesSessions.map(function(session) {
+        return calculateRaceState(session.start_time);
+      })
     };
   } catch (error) {
     console.error('Error fetching drivers for series:', error.message);

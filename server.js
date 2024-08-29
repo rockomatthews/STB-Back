@@ -70,13 +70,13 @@ app.get('/api/race-racers', async function(req, res) {
       return res.status(400).json({ error: 'Series ID is required' });
     }
 
-    console.log('Fetching drivers for series ID: ' + seriesId);
+    console.log('Fetching race sessions for series ID: ' + seriesId);
     const result = await getDriversForSeries(seriesId);
     console.log('Fetched data:', JSON.stringify(result, null, 2));
 
-    if (result.drivers.length === 0) {
+    if (result.relevantSessions === 0) {
       return res.status(404).json({
-        error: 'No drivers found',
+        error: 'No relevant sessions found',
         details: 'No Practice or Qualifying sessions found for this series',
         sessionInfo: {
           totalSessions: result.totalSessions,
@@ -88,9 +88,9 @@ app.get('/api/race-racers', async function(req, res) {
 
     res.json(result);
   } catch (error) {
-    console.error('Error fetching drivers:', error);
+    console.error('Error fetching race sessions:', error);
     res.status(500).json({ 
-      error: 'An error occurred while fetching drivers', 
+      error: 'An error occurred while fetching race sessions', 
       details: error.message,
       stack: error.stack
     });
