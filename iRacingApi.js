@@ -230,58 +230,34 @@ async function getDriversForSeries(seriesId) {
       return cookie.key + '=' + cookie.value;
     }).join('; ');
 
-    console.log('Fetching current season information for series ID:', seriesId);
+    console.log('Fetching race guide for series ID:', seriesId);
 
-    // First, get the current season information
-    const seasonsResponse = await instance.get(BASE_URL + '/data/series/seasons', {
-      headers: { 'Cookie': cookieString }
-    });
-
-    if (!seasonsResponse.data || !seasonsResponse.data.link) {
-      throw new Error('Invalid response from iRacing API for seasons data');
-    }
-
-    const seasonsDataResponse = await instance.get(seasonsResponse.data.link);
-    const seasonsData = seasonsDataResponse.data;
-
-    const currentSeason = seasonsData.find(function(season) {
-      return season.series_id === parseInt(seriesId) && season.active === true;
-    });
-
-    if (!currentSeason) {
-      throw new Error('No active season found for the specified series');
-    }
-
-    console.log('Fetching upcoming sessions for series ID:', seriesId);
-
-    const currentDate = new Date();
-    const oneDayLater = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
-
-    // Now, get upcoming sessions
-    const response = await instance.get(BASE_URL + '/data/results/search_series', {
-      params: {
-        season_year: currentSeason.season_year,
-        season_quarter: currentSeason.season_quarter,
-        series_id: seriesId,
-        start_range_begin: currentDate.toISOString(),
-        start_range_end: oneDayLater.toISOString()
-      },
+    const response = await instance.get(BASE_URL + '/data/season/race_guide', {
       headers: { 'Cookie': cookieString }
     });
 
     if (!response.data || !response.data.link) {
-      throw new Error('Invalid response from iRacing API for upcoming sessions');
+      throw new Error('Invalid response from iRacing API for race guide');
     }
 
-    const sessionsDataResponse = await instance.get(response.data.link);
-    const sessionsData = sessionsDataResponse.data;
+    const raceGuideResponse = await instance.get(response.data.link);
+    const raceGuideData = raceGuideResponse.data;
 
-    if (!Array.isArray(sessionsData) || sessionsData.length === 0) {
-      throw new Error('No upcoming sessions found for this series in the next 24 hours');
+    if (!raceGuideData || !raceGuideData.sessions || !Array.isArray(raceGuideData.sessions)) {
+      throw new Error('Invalid race guide data structure');
+    }
+
+    const relevantSessions = raceGuideData.sessions.filter(function(session) {
+      return session.series_id === parseInt(seriesId) && 
+             (session.status === 'Practice' || session.status === 'Qualifying');
+    });
+
+    if (relevantSessions.length === 0) {
+      throw new Error('No Practice or Qualifying sessions found for this series');
     }
 
     const driverSet = new Set();
-    sessionsData.forEach(function(session) {
+    relevantSessions.forEach(function(session) {
       if (session.session_drivers && Array.isArray(session.session_drivers)) {
         session.session_drivers.forEach(function(driver) {
           driverSet.add(JSON.stringify({
@@ -293,7 +269,7 @@ async function getDriversForSeries(seriesId) {
     });
 
     const drivers = Array.from(driverSet).map(JSON.parse);
-    console.log('Successfully fetched', drivers.length, 'unique drivers for upcoming sessions in series', seriesId);
+    console.log('Successfully fetched', drivers.length, 'unique drivers for Practice/Qualifying sessions in series', seriesId);
     return drivers;
   } catch (error) {
     console.error('Error fetching drivers for series:', error.message);
