@@ -61,11 +61,14 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/race-racers', async function(req, res) {
   try {
+    console.log('Received request for /api/race-racers');
+    console.log('Query parameters:', req.query);
+    
     const subsessionId = req.query.subsessionId;
-    console.log('Received request for subsessionId:', subsessionId); // Add this log
+    console.log('Extracted subsessionId:', subsessionId);
 
     if (!subsessionId) {
-      console.log('Missing subsessionId'); // Add this log
+      console.log('Missing subsessionId');
       return res.status(400).json({ error: 'Subsession ID is required' });
     }
 
@@ -78,7 +81,7 @@ app.get('/api/race-racers', async function(req, res) {
     res.status(500).json({ 
       error: 'An error occurred while fetching racers', 
       details: error.message,
-      stack: error.stack // Include stack trace for debugging
+      stack: error.stack
     });
   }
 });

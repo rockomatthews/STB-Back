@@ -232,12 +232,9 @@ const carClassMap = {
   6: 'Formula'
 };
 
-async function processRaceData(raceData, seriesData, trackData, carData) {
+function processRaceData(raceData, seriesData, trackData, carData) {
   console.log('Processing race data...');
   console.log('Sample raw race data:', JSON.stringify(raceData[0], null, 2));
-  console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
-  console.log('Sample track data:', JSON.stringify(trackData[0], null, 2));
-  console.log('Sample car data:', JSON.stringify(carData[0], null, 2));
 
   const processedRaces = raceData.map(function(race) {
     const series = seriesData.find(function(s) {
@@ -267,10 +264,6 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
       });
     }
 
-    console.log('Series ' + (series ? series.series_name : 'Unknown') + ' (ID: ' + race.series_id + '):');
-    console.log('Car class IDs:', series ? series.car_class_ids : 'N/A');
-    console.log('Available cars:', availableCars);
-
     const processedRace = {
       title: series ? series.series_name : 'Unknown Series',
       start_time: race.start_time,
@@ -281,8 +274,8 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
       car_class_name: carClassMap[series ? series.category_id : 0] || 'Unknown',
       number_of_racers: race.entry_count || 0,
       series_id: race.series_id,
-      available_cars: availableCars,
-      subsession_id: race.subsession_id
+      subsession_id: race.subsession_id, // Include the subsession_id
+      available_cars: availableCars
     };
 
     console.log('Processed race:', JSON.stringify(processedRace, null, 2));
