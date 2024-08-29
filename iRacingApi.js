@@ -1,465 +1,183 @@
-
+import React, { useState, useEffect, useCallback } from 'react';
+import { Box, Typography, Button, CircularProgress, List, ListItem, ListItemText, Divider, Chip, Paper } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import axios from 'axios';
-import crypto from 'crypto';
-import https from 'https';
-import tough from 'tough-cookie';
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import { getSession } from '../authService';
 
-console.log('iRacingApi module loading...');
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
 
-dotenv.config();
+const OfficialRacesList = () => {
+  const [races, setRaces] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalRaces, setTotalRaces] = useState(0);
 
-const { CookieJar } = tough;
+  const fetchRaces = useCallback(async (pageToFetch, isRefresh = false) => {
+    setIsLoading(true);
+    setError(null);
 
-const BASE_URL = 'https://members-ng.iracing.com';
-const cookieJar = new CookieJar();
+    try {
+      console.log(`Fetching races: page ${pageToFetch}, limit 10`);
 
-const instance = axios.create({
-  httpsAgent: new https.Agent({  
-    rejectUnauthorized: false
-  })
-});
-
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Supabase URL or Anon Key is not set in environment variables');
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-function hashPassword(password, email) {
-  const hash = crypto.createHash('sha256');
-  hash.update(password + email.toLowerCase());
-  return hash.digest('base64');
-}
-
-async function login(email, password) {
-  console.log('Attempting to login...');
-  const hashedPassword = hashPassword(password, email);
-
-  try {
-    const response = await instance.post(`${BASE_URL}/auth`, {
-      email,
-      password: hashedPassword
-    }, {
-      headers: {
-        'Content-Type': 'application/json'
+      const session = await getSession();
+      if (!session) {
+        throw new Error('No active session');
       }
-    });
 
-    if (response.headers['set-cookie']) {
-      response.headers['set-cookie'].forEach(cookie => {
-        cookieJar.setCookieSync(cookie, BASE_URL);
+      const response = await axios.get(`${BACKEND_URL}/api/official-races`, {
+        params: { page: pageToFetch, limit: 10 },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        },
+        withCredentials: true
       });
-      console.log('Cookies set:', await cookieJar.getCookies(BASE_URL));
-      return true;
-    } else {
-      console.error('No cookies in response');
-      console.log('Response headers:', response.headers);
-      console.log('Response data:', response.data);
-      throw new Error('No cookies in response');
-    }
-  } catch (error) {
-    console.error('Login failed:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-    }
-    return false;
-  }
-}
 
-async function verifyAuth() {
-  try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+      console.log('Raw response data:', response.data);
 
-    console.log('Verifying auth with cookies:', cookieString);
+      const { races: newRaces, total } = response.data;
 
-    const response = await instance.get(`${BASE_URL}/data/doc`, {
-      headers: {
-        'Cookie': cookieString
+      console.log('Parsed races:', newRaces);
+      console.log('Total races:', total);
+
+      if (isRefresh) {
+        setRaces(newRaces);
+      } else {
+        setRaces(prevRaces => [...prevRaces, ...newRaces]);
       }
-    });
-
-    console.log('Verification response status:', response.status);
-    return response.status === 200;
-  } catch (error) {
-    console.error('Auth verification failed:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
+      setTotalRaces(total);
+    } catch (err) {
+      console.error('Error fetching races:', err);
+      setError('An unexpected error occurred while fetching races. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-    return false;
-  }
-}
+  }, []);
 
-function calculateRaceState(raceStartTime) {
-  const currentTime = new Date();
-  const timeDifference = new Date(raceStartTime) - currentTime;
-  const minutesDifference = timeDifference / (1000 * 60);
+  useEffect(() => {
+    fetchRaces(1, true);
+  }, [fetchRaces]);
 
-  if (minutesDifference <= 0) {
-    return 'Racing';
-  } else if (minutesDifference <= 15) {
-    return 'Qualifying';
-  } else if (minutesDifference <= 45) {
-    return 'Practice';
-  } else {
-    return 'Scheduled';
-  }
-}
+  const handleRefresh = useCallback(() => {
+    console.log('Refreshing races');
+    setPage(1);
+    fetchRaces(1, true);
+  }, [fetchRaces]);
 
-async function fetchSeriesData() {
-  try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+  const handleLoadMore = useCallback(() => {
+    console.log('Loading more races');
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchRaces(nextPage);
+  }, [page, fetchRaces]);
 
-    const response = await instance.get(`${BASE_URL}/data/series/get`, {
-      headers: { 'Cookie': cookieString }
-    });
-
-    if (response.data && response.data.link) {
-      const seriesDataResponse = await instance.get(response.data.link);
-      return seriesDataResponse.data;
-    } else {
-      throw new Error('Invalid series data response from iRacing API');
-    }
-  } catch (error) {
-    console.error('Error fetching series data:', error.message);
-    throw error;
-  }
-}
-
-async function fetchTrackData() {
-  try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
-
-    const response = await instance.get(`${BASE_URL}/data/track/get`, {
-      headers: { 'Cookie': cookieString }
-    });
-
-    if (response.data && response.data.link) {
-      const trackDataResponse = await instance.get(response.data.link);
-      return trackDataResponse.data;
-    } else {
-      throw new Error('Invalid track data response from iRacing API');
-    }
-  } catch (error) {
-    console.error('Error fetching track data:', error.message);
-    throw error;
-  }
-}
-
-async function fetchCarData() {
-  try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
-
-    const response = await instance.get(`${BASE_URL}/data/car/get`, {
-      headers: { 'Cookie': cookieString }
-    });
-
-    if (response.data && response.data.link) {
-      const carDataResponse = await instance.get(response.data.link);
-      return carDataResponse.data;
-    } else {
-      throw new Error('Invalid car data response from iRacing API');
-    }
-  } catch (error) {
-    console.error('Error fetching car data:', error.message);
-    throw error;
-  }
-}
-
-const carClassMap = {
-  1: 'Oval',
-  2: 'Unknown',
-  3: 'Dirt Oval',
-  4: 'Dirt Road',
-  5: 'Sports Car',
-  6: 'Formula'
-};
-
-async function processRaceData(raceData, seriesData, trackData, carData) {
-  console.log('Processing race data...');
-  console.log('Sample raw race data:', JSON.stringify(raceData[0], null, 2));
-  console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
-  console.log('Sample track data:', JSON.stringify(trackData[0], null, 2));
-  console.log('Sample car data:', JSON.stringify(carData[0], null, 2));
-
-  const processedRaces = raceData.map(race => {
-    const series = seriesData.find(s => s.series_id === race.series_id);
-    
-    // Handle potential undefined track object
-    let trackName = 'Unknown Track';
-    if (race.track && race.track.track_id) {
-      const track = trackData.find(t => t.track_id === race.track.track_id);
-      if (track) {
-        trackName = track.track_name;
-      }
-    }
-    
-    const state = calculateRaceState(race.start_time);
-
-    let availableCars = [];
-    if (series && series.car_class_ids) {
-      availableCars = series.car_class_ids.flatMap(classId => 
-        carData.filter(car => car.car_class_id === classId)
-      ).map(car => car.car_name);
-    }
-
-    // Log information about available cars for debugging
-    console.log(`Series ${series ? series.series_name : 'Unknown'} (ID: ${race.series_id}):`);
-    console.log('Car class IDs:', series ? series.car_class_ids : 'N/A');
-    console.log('Available cars:', availableCars);
-
-    const processedRace = {
-      title: series ? series.series_name : 'Unknown Series',
-      start_time: race.start_time,
-      track_name: trackName,
-      state: state,
-      license_level: series ? series.allowed_licenses[0].group_name : 'Unknown',
-      car_class: series ? series.category_id : 0,
-      car_class_name: carClassMap[series ? series.category_id : 0] || 'Unknown',
-      number_of_racers: race.entry_count || 0,
-      series_id: race.series_id,
-      available_cars: availableCars
+  const formatTime = (timeString) => {
+    const options = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      timeZoneName: 'short' 
     };
+    return new Date(timeString).toLocaleString(undefined, options);
+  };
 
-    console.log('Processed race:', JSON.stringify(processedRace, null, 2));
-    return processedRace;
-  });
-
-  const filteredRaces = processedRaces
-    .filter(race => race.state === 'Qualifying' || race.state === 'Practice')
-    .sort((a, b) => {
-      if (a.state === b.state) {
-        return new Date(a.start_time) - new Date(b.start_time);
-      }
-      return a.state === 'Qualifying' ? -1 : 1;
-    });
-
-  console.log(`Processed and filtered ${filteredRaces.length} races`);
-  return filteredRaces;
-}
-
-async function fetchRacesFromIRacingAPI() {
-  console.log('fetchRacesFromIRacingAPI called');
-  try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
-
-    console.log('Fetching race guide data from iRacing API');
-    const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
-      headers: { 'Cookie': cookieString }
-    });
-
-    if (!raceGuideResponse.data || !raceGuideResponse.data.link) {
-      console.error('Invalid race guide response:', raceGuideResponse.data);
-      throw new Error('Invalid race guide response from iRacing API');
+  const getStateColor = (state) => {
+    switch (state) {
+      case 'Qualifying': return 'primary';
+      case 'Practice': return 'secondary';
+      default: return 'default';
     }
-
-    const raceGuideDataResponse = await instance.get(raceGuideResponse.data.link);
-    const raceGuide = raceGuideDataResponse.data;
-
-    console.log('Fetching series data');
-    const seriesData = await fetchSeriesData();
-    console.log(`Fetched ${seriesData.length} series`);
-    console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
-
-    console.log('Fetching track data');
-    const trackData = await fetchTrackData();
-    console.log(`Fetched ${trackData.length} tracks`);
-    console.log('Sample track data:', JSON.stringify(trackData[0], null, 2));
-
-    console.log('Fetching car data');
-    const carData = await fetchCarData();
-    console.log(`Fetched ${carData.length} cars`);
-    console.log('Sample car data:', JSON.stringify(carData[0], null, 2));
-
-    console.log('Processing race data');
-    console.log(`Total races to process: ${raceGuide.sessions.length}`);
-
-    const officialRaces = await processRaceData(raceGuide.sessions, seriesData, trackData, carData);
-
-    console.log(`Processed ${officialRaces.length} official races`);
-    return officialRaces;
-  } catch (error) {
-    console.error('Error fetching races from iRacing API:', error.message);
-    console.error('Error stack:', error.stack);
-    if (error.response) {
-      console.error('Error response:', error.response.data);
-    }
-    throw error;
-  }
-}
-
-async function getOfficialRaces(userId, page = 1, limit = 10) {
-  try {
-    console.log(`Getting official races: page ${page}, limit ${limit}`);
-
-    page = Math.max(1, page);
-
-    console.log('Fetching fresh race data from iRacing API');
-    const freshRaces = await fetchRacesFromIRacingAPI();
-
-    if (freshRaces.length > 0) {
-      console.log('Updating Supabase with new race data');
-      console.log('Sample race data being upserted:', JSON.stringify(freshRaces[0], null, 2));
-
-      for (const race of freshRaces) {
-        const { data: upsertData, error: upsertError } = await supabase
-          .from('official_races')
-          .upsert({
-            title: race.title,
-            start_time: race.start_time,
-            track_name: race.track_name,
-            state: race.state,
-            license_level: race.license_level,
-            car_class: race.car_class,
-            number_of_racers: race.number_of_racers,
-            series_id: race.series_id
-          }, {
-            onConflict: 'series_id,start_time',
-            ignoreDuplicates: false
-          });
-
-        if (upsertError) {
-          console.error('Error upserting race:', upsertError);
-        } else {
-          console.log(`Successfully upserted race: ${race.title}`);
-          
-          // Insert available cars
-          for (const car of race.available_cars) {
-            const { data: carData, error: carError } = await supabase
-              .from('available_cars')
-              .upsert({
-                race_id: upsertData[0].id,
-                car_name: car
-              });
-
-            if (carError) {
-              console.error('Error inserting available car:', carError);
-            }
-          }
-        }
-      }
-    }
-
-    // Use the freshly fetched races instead of querying Supabase again
-    const totalRaces = freshRaces.length;
-    const paginatedRaces = freshRaces.slice((page - 1) * limit, page * limit);
-
-    console.log(`Returning ${paginatedRaces.length} races, total count: ${totalRaces}`);
-    console.log('Sample race data:', JSON.stringify(paginatedRaces[0], null, 2));
-
-    return {
-      races: paginatedRaces,
-      total: totalRaces,
-      page: page,
-      limit: limit
-    };
-  } catch (error) {
-    console.error('Error in getOfficialRaces:', error.message);
-    console.error('Error stack:', error.stack);
-    throw error;
-  }
-}
-
-async function searchIRacingName(name) {
-  try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
-
-    const response = await instance.get(`${BASE_URL}/data/lookup/drivers`, {
-      params: {
-        search_term: name,
-        lowerbound: 1,
-        upperbound: 25
-      },
-      headers: {
-        'Cookie': cookieString
-      }
-    });
-
-    if (response.data && response.data.link) {
-      const driverDataResponse = await instance.get(response.data.link);
-      const drivers = Array.isArray(driverDataResponse.data) ? driverDataResponse.data : [];
-
-      if (drivers.length > 0) {
-        const matchingDriver = drivers.find(driver => 
-          driver.display_name.toLowerCase() === name.toLowerCase() ||
-          driver.display_name.toLowerCase().includes(name.toLowerCase())
-        );
-
-        if (matchingDriver) {
-          return {
-            exists: true,
-            name: matchingDriver.display_name,
-            id: matchingDriver.cust_id
-          };
-        }
-      }
-    }
-
-    return { exists: false };
-  } catch (error) {
-    console.error('Error searching for iRacing name:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
-    }
-    throw error;
-  }
-}
-
-async function getTotalRacesCount() {
-  const { count, error } = await supabase
-    .from('official_races')
-    .select('*', { count: 'exact', head: true });
+  };
 
   if (error) {
-    console.error('Error getting total race count from Supabase:', error);
-    throw error;
+    return (
+      <Box sx={{ maxWidth: 600, margin: 'auto', mt: 4 }}>
+        <Typography color="error" sx={{ mt: 2 }}>
+          Error: {error}
+        </Typography>
+        <Button onClick={handleRefresh} sx={{ mt: 2 }}>
+          Try Again
+        </Button>
+      </Box>
+    );
   }
-  return count;
-}
 
-// Periodic re-authentication
-const RE_AUTH_INTERVAL = 30 * 60 * 1000; // 30 minutes
+  return (
+    <Box sx={{ maxWidth: 600, margin: 'auto', mt: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h5">Official Races</Typography>
+        <Button
+          startIcon={<RefreshIcon />}
+          onClick={handleRefresh}
+          disabled={isLoading}
+        >
+          Refresh
+        </Button>
+      </Box>
 
-async function periodicReAuth() {
-  try {
-    const isAuthenticated = await verifyAuth();
-    if (!isAuthenticated) {
-      console.log('Session expired. Attempting to re-authenticate...');
-      await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
-    }
-  } catch (error) {
-    console.error('Error during periodic re-authentication:', error);
-  }
-}
+      <List>
+        {races.map((race, index) => (
+          <Paper key={`${race.series_id}_${race.start_time}`} elevation={3} sx={{ mb: 2, overflow: 'hidden' }}>
+            <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', bgcolor: 'background.paper' }}>
+              <ListItemText
+                primary={
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="subtitle1" color="text.primary">{race.title || 'Unknown Series'}</Typography>
+                    <Chip label={race.state || 'Unknown State'} color={getStateColor(race.state)} size="small" />
+                  </Box>
+                }
+                secondary={
+                  <React.Fragment>
+                    <Typography component="span" variant="body2" color="text.primary">
+                      Track: {race.track_name || 'Unknown Track'}
+                    </Typography>
+                    <br />
+                    <Typography variant="body2" color="text.secondary">
+                      Start Time: {formatTime(race.start_time) || 'Unknown'}
+                      <br />
+                      License Level: {race.license_level || 'Unknown'} | Car Class: {race.car_class_name || 'Unknown'} ({race.car_class || 'Unknown'})
+                      <br />
+                      Racers: {race.number_of_racers || 0}
+                      <br />
+                      Available Cars: {race.available_cars ? race.available_cars.join(', ') : 'Unknown'}
+                    </Typography>
+                  </React.Fragment>
+                }
+              />
+              <Button
+                fullWidth
+                endIcon={<ExpandMoreIcon />}
+                onClick={() => console.log('Expand clicked for race:', race.title)}
+                sx={{ mt: 1 }}
+              >
+                Expand
+              </Button>
+            </ListItem>
+          </Paper>
+        ))}
+      </List>
 
-setInterval(periodicReAuth, RE_AUTH_INTERVAL);
+      {isLoading && <CircularProgress sx={{ display: 'block', margin: 'auto', mt: 2 }} />}
 
-// Initialize authentication on module load
-(async () => {
-  try {
-    await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
-  } catch (error) {
-    console.error('Initial authentication failed:', error);
-  }
-})();
+      {!isLoading && races.length < totalRaces && (
+        <Button
+          fullWidth
+          variant="outlined"
+          onClick={handleLoadMore}
+          sx={{ mt: 2 }}
+        >
+          Load More
+        </Button>
+      )}
 
-export {
-  login,
-  verifyAuth,
-  searchIRacingName,
-  getOfficialRaces,
-  getTotalRacesCount
+      {!isLoading && races.length === 0 && (
+        <Typography sx={{ mt: 2 }}>No official races found.</Typography>
+      )}
+    </Box>
+  );
 };
+
+export default OfficialRacesList;
