@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import { login, verifyAuth, getOfficialRaces, searchIRacingName, getRacers } from './iRacingApi.js';
+import { login, verifyAuth, getOfficialRaces, searchIRacingName, getRacers, exploreRaceGuide } from './iRacingApi.js';
 import { createClient } from '@supabase/supabase-js';
 
 console.log('Server starting...');
@@ -100,6 +100,19 @@ app.get('/api/official-races', async (req, res) => {
     console.error('Error fetching official races:', error);
     res.status(500).json({ 
       error: 'An error occurred while fetching official races', 
+      details: error.message
+    });
+  }
+});
+
+app.get('/api/explore-race-guide', async (req, res) => {
+  try {
+    const raceGuideData = await exploreRaceGuide();
+    res.json(raceGuideData);
+  } catch (error) {
+    console.error('Error exploring race guide:', error);
+    res.status(500).json({ 
+      error: 'An error occurred while exploring the race guide', 
       details: error.message
     });
   }

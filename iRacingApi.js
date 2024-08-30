@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import crypto from 'crypto';
 import https from 'https';
@@ -234,7 +233,7 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
     const series = seriesData.find(function(s) {
       return s.series_id === race.series_id;
     });
-    
+
     let trackName = 'Unknown Track';
     if (race.track && race.track.track_id) {
       const track = trackData.find(function(t) {
@@ -244,7 +243,7 @@ async function processRaceData(raceData, seriesData, trackData, carData) {
         trackName = track.track_name;
       }
     }
-    
+
     const state = calculateRaceState(race.start_time);
 
     let availableCars = [];
@@ -378,7 +377,7 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
           console.error('Error upserting race:', upsertError);
         } else {
           console.log(`Successfully upserted race: ${race.title}`);
-          
+
           // Insert available cars
           for (const car of race.available_cars) {
             const { data: carData, error: carError } = await supabase
@@ -388,124 +387,178 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
                 car_name: car
               });
 
-            if (carError) {
-              console.error('Error inserting available car:', carError);
+              if (carError) {
+                console.error('Error inserting available car:', carError);
+              }
             }
           }
         }
       }
+  
+      // Use the freshly fetched races instead of querying Supabase again
+      const totalRaces = freshRaces.length;
+      const paginatedRaces = freshRaces.slice((page - 1) * limit, page * limit);
+  
+      console.log(`Returning ${paginatedRaces.length} races, total count: ${totalRaces}`);
+      console.log('Sample race data:', JSON.stringify(paginatedRaces[0], null, 2));
+  
+      return {
+        races: paginatedRaces,
+        total: totalRaces,
+        page: page,
+        limit: limit
+      };
+    } catch (error) {
+      console.error('Error in getOfficialRaces:', error.message);
+      console.error('Error stack:', error.stack);
+      throw error;
     }
-
-    // Use the freshly fetched races instead of querying Supabase again
-    const totalRaces = freshRaces.length;
-    const paginatedRaces = freshRaces.slice((page - 1) * limit, page * limit);
-
-    console.log(`Returning ${paginatedRaces.length} races, total count: ${totalRaces}`);
-    console.log('Sample race data:', JSON.stringify(paginatedRaces[0], null, 2));
-
-    return {
-      races: paginatedRaces,
-      total: totalRaces,
-      page: page,
-      limit: limit
-    };
-  } catch (error) {
-    console.error('Error in getOfficialRaces:', error.message);
-    console.error('Error stack:', error.stack);
-    throw error;
   }
-}
-
-async function searchIRacingName(name) {
-  try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
-
-    const response = await instance.get(`${BASE_URL}/data/lookup/drivers`, {
-      params: {
-        search_term: name,
-        lowerbound: 1,
-        upperbound: 25
-      },
-      headers: {
-        'Cookie': cookieString
-      }
-    });
-
-    if (response.data && response.data.link) {
-      const driverDataResponse = await instance.get(response.data.link);
-      const drivers = Array.isArray(driverDataResponse.data) ? driverDataResponse.data : [];
-
-      if (drivers.length > 0) {
-        const matchingDriver = drivers.find(driver => 
-          driver.display_name.toLowerCase() === name.toLowerCase() ||
-          driver.display_name.toLowerCase().includes(name.toLowerCase())
-        );
-
-        if (matchingDriver) {
-          return {
-            exists: true,
-            name: matchingDriver.display_name,
-            id: matchingDriver.cust_id
-          };
+  
+  async function searchIRacingName(name) {
+    try {
+      const cookies = await cookieJar.getCookies(BASE_URL);
+      const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+  
+      const response = await instance.get(`${BASE_URL}/data/lookup/drivers`, {
+        params: {
+          search_term: name,
+          lowerbound: 1,
+          upperbound: 25
+        },
+        headers: {
+          'Cookie': cookieString
+        }
+      });
+  
+      if (response.data && response.data.link) {
+        const driverDataResponse = await instance.get(response.data.link);
+        const drivers = Array.isArray(driverDataResponse.data) ? driverDataResponse.data : [];
+  
+        if (drivers.length > 0) {
+          const matchingDriver = drivers.find(driver => 
+            driver.display_name.toLowerCase() === name.toLowerCase() ||
+            driver.display_name.toLowerCase().includes(name.toLowerCase())
+          );
+  
+          if (matchingDriver) {
+            return {
+              exists: true,
+              name: matchingDriver.display_name,
+              id: matchingDriver.cust_id
+            };
+          }
         }
       }
+  
+      return { exists: false };
+    } catch (error) {
+      console.error('Error searching for iRacing name:', error.message);
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+      }
+      throw error;
     }
-
-    return { exists: false };
-  } catch (error) {
-    console.error('Error searching for iRacing name:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+  }
+  
+  async function getTotalRacesCount() {
+    const { count, error } = await supabase
+      .from('official_races')
+      .select('*', { count: 'exact', head: true });
+  
+    if (error) {
+      console.error('Error getting total race count from Supabase:', error);
+      throw error;
     }
-    throw error;
+    return count;
   }
-}
-
-async function getTotalRacesCount() {
-  const { count, error } = await supabase
-    .from('official_races')
-    .select('*', { count: 'exact', head: true });
-
-  if (error) {
-    console.error('Error getting total race count from Supabase:', error);
-    throw error;
+  
+  // Periodic re-authentication
+  const RE_AUTH_INTERVAL = 30 * 60 * 1000; // 30 minutes
+  
+  async function periodicReAuth() {
+    try {
+      const isAuthenticated = await verifyAuth();
+      if (!isAuthenticated) {
+        console.log('Session expired. Attempting to re-authenticate...');
+        await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
+      }
+    } catch (error) {
+      console.error('Error during periodic re-authentication:', error);
+    }
   }
-  return count;
-}
-
-// Periodic re-authentication
-const RE_AUTH_INTERVAL = 30 * 60 * 1000; // 30 minutes
-
-async function periodicReAuth() {
-  try {
-    const isAuthenticated = await verifyAuth();
-    if (!isAuthenticated) {
-      console.log('Session expired. Attempting to re-authenticate...');
+  
+  setInterval(periodicReAuth, RE_AUTH_INTERVAL);
+  
+  // Initialize authentication on module load
+  (async () => {
+    try {
       await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
+    } catch (error) {
+      console.error('Initial authentication failed:', error);
     }
-  } catch (error) {
-    console.error('Error during periodic re-authentication:', error);
+  })();
+  
+  // New function to explore race guide data
+  async function exploreRaceGuide() {
+    try {
+      const cookies = await cookieJar.getCookies(BASE_URL);
+      const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+  
+      console.log('Fetching detailed race guide data from iRacing API');
+      const raceGuideResponse = await instance.get(`${BASE_URL}/data/season/race_guide`, {
+        headers: { 'Cookie': cookieString }
+      });
+  
+      if (!raceGuideResponse.data || !raceGuideResponse.data.link) {
+        console.error('Invalid race guide response:', raceGuideResponse.data);
+        throw new Error('Invalid race guide response from iRacing API');
+      }
+  
+      const raceGuideDataResponse = await instance.get(raceGuideResponse.data.link);
+      const raceGuide = raceGuideDataResponse.data;
+  
+      console.log('Full Race Guide Structure:');
+      console.log(JSON.stringify(raceGuide, null, 2));
+  
+      // Analyze the structure to find any fields related to registered drivers
+      const potentialDriverFields = findPotentialDriverFields(raceGuide);
+  
+      return {
+        raceGuide: raceGuide,
+        potentialDriverFields: potentialDriverFields
+      };
+    } catch (error) {
+      console.error('Error exploring race guide:', error.message);
+      throw error;
+    }
   }
-}
-
-setInterval(periodicReAuth, RE_AUTH_INTERVAL);
-
-// Initialize authentication on module load
-(async () => {
-  try {
-    await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
-  } catch (error) {
-    console.error('Initial authentication failed:', error);
+  
+  function findPotentialDriverFields(obj, prefix = '') {
+    let fields = [];
+    for (const [key, value] of Object.entries(obj)) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      if (typeof value === 'object' && value !== null) {
+        fields = fields.concat(findPotentialDriverFields(value, fullKey));
+      } else if (
+        key.toLowerCase().includes('driver') ||
+        key.toLowerCase().includes('racer') ||
+        key.toLowerCase().includes('participant') ||
+        (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object')
+      ) {
+        fields.push(fullKey);
+      }
+    }
+    return fields;
   }
-})();
-
-export {
-  login,
-  verifyAuth,
-  searchIRacingName,
-  getOfficialRaces,
-  getTotalRacesCount,
-  getRacers
-};
+  
+  export {
+    login,
+    verifyAuth,
+    searchIRacingName,
+    getOfficialRaces,
+    getTotalRacesCount,
+    getRacers,
+    exploreRaceGuide
+  };
