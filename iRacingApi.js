@@ -257,8 +257,21 @@ async function getDriversForSeries(seriesId) {
     });
     console.log('All sessions for series ' + seriesId + ':', JSON.stringify(seriesSessions, null, 2));
 
+    if (seriesSessions.length === 0) {
+      console.log('No sessions found for series ID:', seriesId);
+      return {
+        drivers: [],
+        sessions: [],
+        totalSessions: 0,
+        relevantSessions: 0,
+        allSessionStates: [],
+        error: 'No sessions found for the specified series ID'
+      };
+    }
+
     const relevantSessions = seriesSessions.filter(function(session) {
       const raceState = calculateRaceState(session.start_time);
+      console.log('Session start time:', session.start_time, 'Calculated state:', raceState);
       return raceState === 'Practice' || raceState === 'Qualifying';
     });
 
@@ -293,21 +306,22 @@ async function getDriversForSeries(seriesId) {
       };
     });
 
+    const allSessionStates = seriesSessions.map(function(session) {
+      return calculateRaceState(session.start_time);
+    });
+
     return {
       drivers: drivers,
       sessions: sessionsInfo,
       totalSessions: seriesSessions.length,
       relevantSessions: relevantSessions.length,
-      allSessionStates: seriesSessions.map(function(session) {
-        return calculateRaceState(session.start_time);
-      })
+      allSessionStates: allSessionStates
     };
   } catch (error) {
     console.error('Error fetching drivers for series:', error.message);
     throw error;
   }
 }
-
 
 const carClassMap = {
   1: 'Oval',

@@ -74,6 +74,18 @@ app.get('/api/race-racers', async function(req, res) {
     const result = await getDriversForSeries(seriesId);
     console.log('Fetched data:', JSON.stringify(result, null, 2));
 
+    if (result.error) {
+      return res.status(404).json({
+        error: result.error,
+        details: 'No sessions found for the specified series ID',
+        sessionInfo: {
+          totalSessions: result.totalSessions,
+          relevantSessions: result.relevantSessions,
+          allSessionStates: result.allSessionStates
+        }
+      });
+    }
+
     if (result.relevantSessions === 0) {
       return res.status(404).json({
         error: 'No relevant sessions found',
