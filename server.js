@@ -2,8 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import { login, verifyAuth, getOfficialRaces, searchIRacingName, getDriversForSeries } from './iRacingApi.js';
+import { login, verifyAuth, getOfficialRaces, searchIRacingName, getRacers } from './iRacingApi.js';
 import { createClient } from '@supabase/supabase-js';
+
+console.log('Server starting...');
 
 dotenv.config();
 
@@ -59,52 +61,20 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/race-racers', async function(req, res) {
   try {
-    console.log('Received request for /api/race-racers');
-    console.log('Query parameters:', req.query);
-    
-    const seriesId = req.query.seriesId;
-    console.log('Extracted seriesId:', seriesId);
-
-    if (!seriesId) {
-      console.log('Missing seriesId');
-      return res.status(400).json({ error: 'Series ID is required' });
+    const subsessionId = req.query.subsessionId;
+    if (!subsessionId) {
+      return res.status(400).json({ error: 'Subsession ID is required' });
     }
 
-    console.log('Fetching race sessions for series ID: ' + seriesId);
-    const result = await getDriversForSeries(seriesId);
-    console.log('Fetched data:', JSON.stringify(result, null, 2));
-
-    if (result.error) {
-      return res.status(404).json({
-        error: result.error,
-        details: 'No sessions found for the specified series ID',
-        sessionInfo: {
-          totalSessions: result.totalSessions,
-          relevantSessions: result.relevantSessions,
-          allSessionStates: result.allSessionStates
-        }
-      });
-    }
-
-    if (result.relevantSessions === 0) {
-      return res.status(404).json({
-        error: 'No relevant sessions found',
-        details: 'No Practice or Qualifying sessions found for this series',
-        sessionInfo: {
-          totalSessions: result.totalSessions,
-          relevantSessions: result.relevantSessions,
-          allSessionStates: result.allSessionStates
-        }
-      });
-    }
-
-    res.json(result);
+    console.log('Fetching racers for subsession ID: ' + subsessionId);
+    const racers = await getRacers(subsessionId);
+    console.log('Successfully fetched ' + racers.length + ' racers');
+    res.json(racers);
   } catch (error) {
-    console.error('Error fetching race sessions:', error);
+    console.error('Error fetching racers:', error);
     res.status(500).json({ 
-      error: 'An error occurred while fetching race sessions', 
-      details: error.message,
-      stack: error.stack
+      error: 'An error occurred while fetching racers', 
+      details: error.message
     });
   }
 });

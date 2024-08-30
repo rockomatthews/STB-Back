@@ -178,28 +178,21 @@ async function fetchCarData() {
 
 async function getRacers(subsessionId) {
   try {
-    console.log('Getting racers for subsessionId:', subsessionId); // Add this log
-
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(function(cookie) {
       return cookie.key + '=' + cookie.value;
     }).join('; ');
 
-    console.log('Sending request to iRacing API'); // Add this log
     const response = await instance.get(BASE_URL + '/data/results/get', {
       params: { subsession_id: subsessionId },
       headers: { 'Cookie': cookieString }
     });
 
-    console.log('Received response from iRacing API'); // Add this log
-
     if (response.data && response.data.link) {
-      console.log('Fetching results data from link'); // Add this log
       const resultsDataResponse = await instance.get(response.data.link);
       const resultsData = resultsDataResponse.data;
 
       if (resultsData && resultsData.session_results && resultsData.session_results[0] && resultsData.session_results[0].results) {
-        console.log('Processing racers data'); // Add this log
         return resultsData.session_results[0].results.map(function(racer) {
           return {
             id: racer.cust_id,
@@ -210,115 +203,13 @@ async function getRacers(subsessionId) {
           };
         });
       } else {
-        console.log('No results data found for this subsession'); // Add this log
         throw new Error('No results data found for this subsession');
       }
     } else {
-      console.log('Invalid response from iRacing API'); // Add this log
       throw new Error('Invalid response from iRacing API');
     }
   } catch (error) {
     console.error('Error fetching racers:', error.message);
-    throw error;
-  }
-}
-
-async function getDriversForSeries(seriesId) {
-  try {
-    const cookies = await cookieJar.getCookies(BASE_URL);
-    const cookieString = cookies.map(function(cookie) {
-      return cookie.key + '=' + cookie.value;
-    }).join('; ');
-
-    console.log('Fetching race guide for series ID:', seriesId);
-
-    const response = await instance.get(BASE_URL + '/data/season/race_guide', {
-      headers: { 'Cookie': cookieString }
-    });
-
-    if (!response.data || !response.data.link) {
-      console.log('Race guide response:', response.data);
-      throw new Error('Invalid response from iRacing API for race guide');
-    }
-
-    const raceGuideResponse = await instance.get(response.data.link);
-    const raceGuideData = raceGuideResponse.data;
-
-    console.log('Race guide data structure:', JSON.stringify(raceGuideData, null, 2));
-
-    if (!raceGuideData || !raceGuideData.sessions || !Array.isArray(raceGuideData.sessions)) {
-      throw new Error('Invalid race guide data structure');
-    }
-
-    console.log('Total sessions in race guide:', raceGuideData.sessions.length);
-
-    const seriesSessions = raceGuideData.sessions.filter(function(session) {
-      return session.series_id === parseInt(seriesId);
-    });
-    console.log('All sessions for series ' + seriesId + ':', JSON.stringify(seriesSessions, null, 2));
-
-    if (seriesSessions.length === 0) {
-      console.log('No sessions found for series ID:', seriesId);
-      return {
-        drivers: [],
-        sessions: [],
-        totalSessions: 0,
-        relevantSessions: 0,
-        allSessionStates: [],
-        error: 'No sessions found for the specified series ID'
-      };
-    }
-
-    const relevantSessions = seriesSessions.filter(function(session) {
-      const raceState = calculateRaceState(session.start_time);
-      console.log('Session start time:', session.start_time, 'Calculated state:', raceState);
-      return raceState === 'Practice' || raceState === 'Qualifying';
-    });
-
-    console.log('Relevant sessions found:', relevantSessions.length);
-
-    const driverSet = new Set();
-    relevantSessions.forEach(function(session) {
-      if (session.session_drivers && Array.isArray(session.session_drivers)) {
-        session.session_drivers.forEach(function(driver) {
-          driverSet.add(JSON.stringify({
-            id: driver.cust_id,
-            name: driver.display_name
-          }));
-        });
-      } else {
-        console.log('No drivers found for session:', session.subsession_id);
-      }
-    });
-
-    const drivers = Array.from(driverSet).map(function(driverString) {
-      return JSON.parse(driverString);
-    });
-    console.log('Fetched', drivers.length, 'unique drivers for Practice/Qualifying sessions in series', seriesId);
-
-    const sessionsInfo = relevantSessions.map(function(session) {
-      return {
-        season_id: session.season_id,
-        start_time: session.start_time,
-        end_time: session.end_time,
-        entry_count: session.entry_count,
-        state: calculateRaceState(session.start_time)
-      };
-    });
-
-    const allSessionStates = seriesSessions.map(function(session) {
-      return calculateRaceState(session.start_time);
-    });
-
-    return {
-      drivers: drivers,
-      sessions: sessionsInfo,
-      totalSessions: seriesSessions.length,
-      relevantSessions: relevantSessions.length,
-      allSessionStates: allSessionStates
-    };
-  } catch (error) {
-    console.error('Error fetching drivers for series:', error.message);
     throw error;
   }
 }
@@ -332,9 +223,12 @@ const carClassMap = {
   6: 'Formula'
 };
 
-function processRaceData(raceData, seriesData, trackData, carData) {
+async function processRaceData(raceData, seriesData, trackData, carData) {
   console.log('Processing race data...');
   console.log('Sample raw race data:', JSON.stringify(raceData[0], null, 2));
+  console.log('Sample series data:', JSON.stringify(seriesData[0], null, 2));
+  console.log('Sample track data:', JSON.stringify(trackData[0], null, 2));
+  console.log('Sample car data:', JSON.stringify(carData[0], null, 2));
 
   const processedRaces = raceData.map(function(race) {
     const series = seriesData.find(function(s) {
@@ -364,6 +258,10 @@ function processRaceData(raceData, seriesData, trackData, carData) {
       });
     }
 
+    console.log('Series ' + (series ? series.series_name : 'Unknown') + ' (ID: ' + race.series_id + '):');
+    console.log('Car class IDs:', series ? series.car_class_ids : 'N/A');
+    console.log('Available cars:', availableCars);
+
     const processedRace = {
       title: series ? series.series_name : 'Unknown Series',
       start_time: race.start_time,
@@ -374,8 +272,8 @@ function processRaceData(raceData, seriesData, trackData, carData) {
       car_class_name: carClassMap[series ? series.category_id : 0] || 'Unknown',
       number_of_racers: race.entry_count || 0,
       series_id: race.series_id,
-      subsession_id: race.subsession_id, // Include the subsession_id
-      available_cars: availableCars
+      available_cars: availableCars,
+      subsession_id: race.subsession_id
     };
 
     console.log('Processed race:', JSON.stringify(processedRace, null, 2));
@@ -609,6 +507,5 @@ export {
   searchIRacingName,
   getOfficialRaces,
   getTotalRacesCount,
-  getRacers,
-  getDriversForSeries
+  getRacers
 };
