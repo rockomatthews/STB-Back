@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import { login, verifyAuth, getOfficialRaces, searchIRacingName, getRacers, exploreRaceGuide } from './iRacingApi.js';
+import { login, verifyAuth, getOfficialRaces, searchIRacingName, getRacers, exploreRaceGuide, exploreSpectatorSubsessionIds } from './iRacingApi.js';
 import { createClient } from '@supabase/supabase-js';
 
 console.log('Server starting...');
@@ -117,6 +117,21 @@ app.get('/api/explore-race-guide', async (req, res) => {
     });
   }
 });
+
+
+app.get('/api/explore-spectator-subsessions', async (req, res) => {
+  try {
+    const spectatorData = await exploreSpectatorSubsessionIds();
+    res.json(spectatorData);
+  } catch (error) {
+    console.error('Error exploring spectator subsessions:', error);
+    res.status(500).json({ 
+      error: 'An error occurred while exploring spectator subsessions', 
+      details: error.message
+    });
+  }
+});
+
 
 // Endpoint to search for an iRacing name
 app.get('/api/search-iracing-name', async (req, res) => {

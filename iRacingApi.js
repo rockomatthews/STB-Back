@@ -343,6 +343,81 @@ async function fetchRacesFromIRacingAPI() {
   }
 }
 
+
+async function exploreSpectatorSubsessionIds() {
+  try {
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    console.log('Fetching spectator subsession IDs from iRacing API');
+    const spectatorResponse = await instance.get(`${BASE_URL}/data/season/spectator_subsessionids`, {
+      headers: { 'Cookie': cookieString },
+      params: {
+        event_types: '2,3,4,5', // Include all event types: Practice, Qualify, Time Trial, Race
+      }
+    });
+
+    if (!spectatorResponse.data || !spectatorResponse.data.link) {
+      console.error('Invalid spectator subsession response:', spectatorResponse.data);
+      throw new Error('Invalid spectator subsession response from iRacing API');
+    }
+
+    const spectatorDataResponse = await instance.get(spectatorResponse.data.link);
+    const spectatorData = spectatorDataResponse.data;
+
+    console.log('Spectator Subsession IDs Structure:');
+    console.log(JSON.stringify(spectatorData, null, 2));
+
+    // If we have subsession IDs, let's try to fetch details for the first few
+    if (Array.isArray(spectatorData) && spectatorData.length > 0) {
+      console.log(`Found ${spectatorData.length} subsession IDs. Fetching details for the first 3:`);
+      for (let i = 0; i < Math.min(3, spectatorData.length); i++) {
+        await fetchSubsessionDetails(spectatorData[i]);
+      }
+    } else {
+      console.log('No subsession IDs found.');
+    }
+
+    return spectatorData;
+  } catch (error) {
+    console.error('Error exploring spectator subsession IDs:', error.message);
+    throw error;
+  }
+}
+
+async function fetchSubsessionDetails(subsessionId) {
+  try {
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    console.log(`Fetching details for subsession ID: ${subsessionId}`);
+    const detailsResponse = await instance.get(`${BASE_URL}/data/results/get`, {
+      headers: { 'Cookie': cookieString },
+      params: {
+        subsession_id: subsessionId
+      }
+    });
+
+    if (!detailsResponse.data || !detailsResponse.data.link) {
+      console.error('Invalid subsession details response:', detailsResponse.data);
+      throw new Error('Invalid subsession details response from iRacing API');
+    }
+
+    const detailsDataResponse = await instance.get(detailsResponse.data.link);
+    const detailsData = detailsDataResponse.data;
+
+    console.log(`Details for subsession ID ${subsessionId}:`);
+    console.log(JSON.stringify(detailsData, null, 2));
+
+    return detailsData;
+  } catch (error) {
+    console.error(`Error fetching details for subsession ID ${subsessionId}:`, error.message);
+  }
+}
+
+
+
+
 async function getOfficialRaces(userId, page = 1, limit = 10) {
   try {
     console.log(`Getting official races: page ${page}, limit ${limit}`);
@@ -560,5 +635,7 @@ async function getOfficialRaces(userId, page = 1, limit = 10) {
     getOfficialRaces,
     getTotalRacesCount,
     getRacers,
-    exploreRaceGuide
+    exploreRaceGuide,
+    exploreSpectatorSubsessionIds,
+    fetchSubsessionDetails
   };
