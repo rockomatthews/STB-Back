@@ -87,11 +87,34 @@ app.get('/api/search-iracing-name', async (req, res) => {
   }
 });
 
-// Endpoint to get league subsessions
+app.get('/api/league-seasons', async (req, res) => {
+  try {
+    const leagueId = 11489; // Your league ID
+    console.log(`Fetching seasons for league: ${leagueId}`);
+
+    const seasons = await getLeagueSeasons(leagueId);
+    console.log('Successfully fetched league seasons');
+
+    res.json(seasons);
+  } catch (error) {
+    console.error('Error fetching league seasons:', error);
+    res.status(500).json({ 
+      error: 'An error occurred while fetching league seasons', 
+      details: error.message
+    });
+  }
+});
+
+// Updated endpoint to get league subsessions
 app.get('/api/league-subsessions', async (req, res) => {
   try {
     const leagueId = 11489; // Your league ID
-    const seasonId = req.query.seasonId ? parseInt(req.query.seasonId) : -1; // Allow specifying a season ID in the query params
+    const { seasonId } = req.query;
+
+    if (!seasonId) {
+      return res.status(400).json({ error: 'seasonId query parameter is required' });
+    }
+
     console.log(`Fetching subsessions for league: ${leagueId}, season: ${seasonId}`);
 
     const subsessions = await getLeagueSubsessions(leagueId, seasonId);

@@ -133,13 +133,12 @@ async function searchIRacingName(name) {
   }
 }
 
-async function getLeagueSubsessions(leagueId, seasonId = -1) {
+async function getLeagueSeasons(leagueId) {
   try {
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
-    // First, fetch the league seasons
-    const seasonsResponse = await instance.get(`${BASE_URL}/data/league/seasons`, {
+    const response = await instance.get(`${BASE_URL}/data/league/seasons`, {
       params: {
         league_id: leagueId
       },
@@ -148,35 +147,47 @@ async function getLeagueSubsessions(leagueId, seasonId = -1) {
       }
     });
 
-    if (seasonsResponse.data && seasonsResponse.data.link) {
-      const seasonsDataResponse = await instance.get(seasonsResponse.data.link);
-      const seasons = seasonsDataResponse.data;
-
-      // If no specific season is requested, use the most recent active season
-      if (seasonId === -1 && seasons.length > 0) {
-        seasonId = seasons.find(season => !season.retired_season)?.season_id || seasons[0].season_id;
-      }
-
-      // Now fetch the subsessions for the selected season
-      const response = await instance.get(`${BASE_URL}/data/league/season_sessions`, {
-        params: {
-          league_id: leagueId,
-          season_id: seasonId,
-          results_only: false  // Include upcoming sessions as well
-        },
-        headers: {
-          'Cookie': cookieString
-        }
-      });
-
-      if (response.data && response.data.link) {
-        const subsessionsResponse = await instance.get(response.data.link);
-        return subsessionsResponse.data;
-      } else {
-        throw new Error('Invalid response from iRacing API for league subsessions');
-      }
+    if (response.data && response.data.link) {
+      const seasonsDataResponse = await instance.get(response.data.link);
+      return seasonsDataResponse.data;
     } else {
       throw new Error('Invalid response from iRacing API for league seasons');
+    }
+  } catch (error) {
+    console.error('Error fetching league seasons:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+    }
+    throw error;
+  }
+}
+
+async function getLeagueSubsessions(leagueId, seasonId) {
+  if (!seasonId) {
+    throw new Error('season_id is required');
+  }
+
+  try {
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    const response = await instance.get(`${BASE_URL}/data/league/season_sessions`, {
+      params: {
+        league_id: leagueId,
+        season_id: seasonId,
+        results_only: false  // Include upcoming sessions as well
+      },
+      headers: {
+        'Cookie': cookieString
+      }
+    });
+
+    if (response.data && response.data.link) {
+      const subsessionsResponse = await instance.get(response.data.link);
+      return subsessionsResponse.data;
+    } else {
+      throw new Error('Invalid response from iRacing API for league subsessions');
     }
   } catch (error) {
     console.error('Error fetching league subsessions:', error.message);
