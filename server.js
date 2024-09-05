@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import { login, verifyAuth, searchIRacingName, getLeagueSeasons, getLeagueSubsessions } from './iRacingApi.js';
+import { login, verifyAuth, searchIRacingName, getLeagueSeasons, getLeagueSubsessions, getLeagueRoster } from './iRacingApi.js';
 import { createClient } from '@supabase/supabase-js';
 
 console.log('Server starting...');
@@ -144,6 +144,24 @@ app.get('/api/league-subsessions', async (req, res) => {
     console.error('Error fetching league subsessions:', error);
     res.status(500).json({ 
       error: 'An error occurred while fetching league subsessions', 
+      details: error.message
+    });
+  }
+});
+
+app.get('/api/league-roster', async (req, res) => {
+  try {
+    const leagueId = 11489; // Your league ID
+    console.log(`Fetching roster for league: ${leagueId}`);
+
+    const roster = await getLeagueRoster(leagueId);
+    console.log('Successfully fetched league roster');
+
+    res.json(roster);
+  } catch (error) {
+    console.error('Error fetching league roster:', error);
+    res.status(500).json({ 
+      error: 'An error occurred while fetching league roster', 
       details: error.message
     });
   }

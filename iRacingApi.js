@@ -199,6 +199,37 @@ async function getLeagueSubsessions(leagueId, seasonId) {
   }
 }
 
+async function getLeagueRoster(leagueId) {
+  try {
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    const response = await instance.get(`${BASE_URL}/data/league/roster`, {
+      params: {
+        league_id: leagueId
+      },
+      headers: {
+        'Cookie': cookieString
+      }
+    });
+
+    if (response.data && response.data.link) {
+      const rosterDataResponse = await instance.get(response.data.link);
+      return rosterDataResponse.data;
+    } else {
+      throw new Error('Invalid response from iRacing API for league roster');
+    }
+  } catch (error) {
+    console.error('Error fetching league roster:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+    }
+    throw error;
+  }
+}
+
+
 // Periodic re-authentication
 const RE_AUTH_INTERVAL = 30 * 60 * 1000; // 30 minutes
 
