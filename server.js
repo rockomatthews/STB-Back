@@ -91,25 +91,29 @@ app.get('/api/search-iracing-name', async (req, res) => {
 app.get('/api/league-subsessions', async (req, res) => {
   try {
     const leagueId = 11489; // Your league ID
-    console.log('Fetching subsessions for league:', leagueId);
+    const seasonId = req.query.seasonId ? parseInt(req.query.seasonId) : -1; // Allow specifying a season ID in the query params
+    console.log(`Fetching subsessions for league: ${leagueId}, season: ${seasonId}`);
 
-    const subsessions = await getLeagueSubsessions(leagueId);
+    const subsessions = await getLeagueSubsessions(leagueId, seasonId);
     console.log('Successfully fetched league subsessions');
 
     // Optional: Store subsessions in Supabase
-    const { data, error } = await supabase
-      .from('league_subsessions')
-      .upsert(subsessions.map(session => ({
-        ...session,
-        league_id: leagueId,
-        updated_at: new Date()
-      })), 
-      { onConflict: 'subsession_id' });
+    if (subsessions && Array.isArray(subsessions)) {
+      const { data, error } = await supabase
+        .from('league_subsessions')
+        .upsert(subsessions.map(session => ({
+          ...session,
+          league_id: leagueId,
+          season_id: seasonId,
+          updated_at: new Date()
+        })), 
+        { onConflict: 'subsession_id' });
 
-    if (error) {
-      console.error('Error storing subsessions in Supabase:', error);
-    } else {
-      console.log('Successfully stored subsessions in Supabase');
+      if (error) {
+        console.error('Error storing subsessions in Supabase:', error);
+      } else {
+        console.log('Successfully stored subsessions in Supabase');
+      }
     }
 
     res.json(subsessions);
