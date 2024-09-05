@@ -228,8 +228,6 @@ async function getLeagueRoster(leagueId) {
     throw error;
   }
 }
-
-
 // Periodic re-authentication
 const RE_AUTH_INTERVAL = 30 * 60 * 1000; // 30 minutes
 
