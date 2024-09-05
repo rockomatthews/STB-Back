@@ -229,5 +229,6 @@ export {
   login,
   verifyAuth,
   searchIRacingName,
+  getLeagueSeasons,
   getLeagueSubsessions
 };
