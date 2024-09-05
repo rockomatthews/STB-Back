@@ -2,8 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import { login, verifyAuth, getOfficialRaces, searchIRacingName, getRacers, exploreRaceGuide, exploreSpectatorSubsessionIds } from './iRacingApi.js';
-import { createClient } from '@supabase/supabase-js';
+import { login, verifyAuth, searchIRacingName } from './iRacingApi.js';
 
 console.log('Server starting...');
 
@@ -24,10 +23,6 @@ app.use(express.json());
 app.use(cookieParser());
 
 const PORT = process.env.PORT || 3001;
-
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 const MAX_LOGIN_ATTEMPTS = 3;
 const LOGIN_RETRY_DELAY = 5000; // 5 seconds
@@ -58,80 +53,6 @@ async function attemptLogin(attempts = 0) {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' });
 });
-
-app.get('/api/race-racers', async function(req, res) {
-  try {
-    const subsessionId = req.query.subsessionId;
-    if (!subsessionId) {
-      return res.status(400).json({ error: 'Subsession ID is required' });
-    }
-
-    console.log('Fetching racers for subsession ID: ' + subsessionId);
-    const racers = await getRacers(subsessionId);
-    console.log('Successfully fetched ' + racers.length + ' racers');
-    res.json(racers);
-  } catch (error) {
-    console.error('Error fetching racers:', error);
-    res.status(500).json({ 
-      error: 'An error occurred while fetching racers', 
-      details: error.message
-    });
-  }
-});
-
-// Endpoint to get official races with pagination
-app.get('/api/official-races', async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-
-    let userId = req.query.userId || req.cookies.userId;
-
-    if (!userId) {
-      userId = 'temp_' + Math.random().toString(36).substr(2, 9);
-      res.cookie('userId', userId, { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 });
-    }
-
-    console.log(`Fetching official races for user ${userId}: page ${page}, limit ${limit}`);
-    const races = await getOfficialRaces(userId, page, limit);
-    console.log(`Successfully fetched ${races.races.length} races`);
-    res.json(races);
-  } catch (error) {
-    console.error('Error fetching official races:', error);
-    res.status(500).json({ 
-      error: 'An error occurred while fetching official races', 
-      details: error.message
-    });
-  }
-});
-
-app.get('/api/explore-race-guide', async (req, res) => {
-  try {
-    const raceGuideData = await exploreRaceGuide();
-    res.json(raceGuideData);
-  } catch (error) {
-    console.error('Error exploring race guide:', error);
-    res.status(500).json({ 
-      error: 'An error occurred while exploring the race guide', 
-      details: error.message
-    });
-  }
-});
-
-
-app.get('/api/explore-spectator-subsessions', async (req, res) => {
-  try {
-    const spectatorData = await exploreSpectatorSubsessionIds();
-    res.json(spectatorData);
-  } catch (error) {
-    console.error('Error exploring spectator subsessions:', error);
-    res.status(500).json({ 
-      error: 'An error occurred while exploring spectator subsessions', 
-      details: error.message
-    });
-  }
-});
-
 
 // Endpoint to search for an iRacing name
 app.get('/api/search-iracing-name', async (req, res) => {
