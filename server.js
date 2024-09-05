@@ -2,7 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import { login, verifyAuth, searchIRacingName } from './iRacingApi.js';
+import { login, verifyAuth, searchIRacingName, getLeagueSubsessions } from './iRacingApi.js';
+import { createClient } from '@supabase/supabase-js';
 
 console.log('Server starting...');
 
@@ -23,6 +24,11 @@ app.use(express.json());
 app.use(cookieParser());
 
 const PORT = process.env.PORT || 3001;
+
+// Supabase setup
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const MAX_LOGIN_ATTEMPTS = 3;
 const LOGIN_RETRY_DELAY = 5000; // 5 seconds
@@ -76,6 +82,41 @@ app.get('/api/search-iracing-name', async (req, res) => {
     console.error('Error in search-iracing-name endpoint:', error);
     res.status(500).json({ 
       error: 'An error occurred while searching for the iRacing name', 
+      details: error.message
+    });
+  }
+});
+
+// Endpoint to get league subsessions
+app.get('/api/league-subsessions', async (req, res) => {
+  try {
+    const leagueId = 11489; // Your league ID
+    console.log('Fetching subsessions for league:', leagueId);
+
+    const subsessions = await getLeagueSubsessions(leagueId);
+    console.log('Successfully fetched league subsessions');
+
+    // Optional: Store subsessions in Supabase
+    const { data, error } = await supabase
+      .from('league_subsessions')
+      .upsert(subsessions.map(session => ({
+        ...session,
+        league_id: leagueId,
+        updated_at: new Date()
+      })), 
+      { onConflict: 'subsession_id' });
+
+    if (error) {
+      console.error('Error storing subsessions in Supabase:', error);
+    } else {
+      console.log('Successfully stored subsessions in Supabase');
+    }
+
+    res.json(subsessions);
+  } catch (error) {
+    console.error('Error fetching league subsessions:', error);
+    res.status(500).json({ 
+      error: 'An error occurred while fetching league subsessions', 
       details: error.message
     });
   }

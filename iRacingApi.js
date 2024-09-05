@@ -133,6 +133,38 @@ async function searchIRacingName(name) {
   }
 }
 
+async function getLeagueSubsessions(leagueId) {
+  try {
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    const response = await instance.get(`${BASE_URL}/data/league/season_sessions`, {
+      params: {
+        league_id: leagueId,
+        season_id: -1,  // This will fetch all seasons
+        results_only: false  // Include upcoming sessions as well
+      },
+      headers: {
+        'Cookie': cookieString
+      }
+    });
+
+    if (response.data && response.data.link) {
+      const subsessionsResponse = await instance.get(response.data.link);
+      return subsessionsResponse.data;
+    } else {
+      throw new Error('Invalid response from iRacing API for league subsessions');
+    }
+  } catch (error) {
+    console.error('Error fetching league subsessions:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+    }
+    throw error;
+  }
+}
+
 // Periodic re-authentication
 const RE_AUTH_INTERVAL = 30 * 60 * 1000; // 30 minutes
 
@@ -162,5 +194,6 @@ setInterval(periodicReAuth, RE_AUTH_INTERVAL);
 export {
   login,
   verifyAuth,
-  searchIRacingName
+  searchIRacingName,
+  getLeagueSubsessions
 };
