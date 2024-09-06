@@ -204,6 +204,7 @@ async function getLeagueRoster(leagueId) {
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
+    console.log(`Fetching roster for league ID: ${leagueId}`);
     const response = await instance.get(`${BASE_URL}/data/league/roster`, {
       params: {
         league_id: leagueId
@@ -213,10 +214,15 @@ async function getLeagueRoster(leagueId) {
       }
     });
 
+    console.log('Initial roster response:', response.data);
+
     if (response.data && response.data.link) {
+      console.log('Fetching roster data from link:', response.data.link);
       const rosterDataResponse = await instance.get(response.data.link);
+      console.log('Roster data response:', rosterDataResponse.data);
       return rosterDataResponse.data;
     } else {
+      console.error('Invalid response structure:', response.data);
       throw new Error('Invalid response from iRacing API for league roster');
     }
   } catch (error) {

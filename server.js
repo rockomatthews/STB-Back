@@ -155,9 +155,17 @@ app.get('/api/league-roster', async (req, res) => {
     console.log(`Fetching roster for league: ${leagueId}`);
 
     const roster = await getLeagueRoster(leagueId);
-    console.log('Successfully fetched league roster');
-
-    res.json(roster);
+    
+    if (roster && Array.isArray(roster)) {
+      console.log('Successfully fetched league roster');
+      res.json({ roster });
+    } else {
+      console.error('Unexpected roster data format:', roster);
+      res.status(500).json({ 
+        error: 'Received unexpected data format for roster', 
+        details: JSON.stringify(roster)
+      });
+    }
   } catch (error) {
     console.error('Error fetching league roster:', error);
     res.status(500).json({ 
