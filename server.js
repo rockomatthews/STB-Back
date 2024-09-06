@@ -156,11 +156,12 @@ app.get('/api/league-roster', async (req, res) => {
 
     const rosterData = await getLeagueRoster(leagueId);
     
-    if (rosterData && rosterData.roster && Array.isArray(rosterData.roster)) {
+    if (rosterData && Array.isArray(rosterData.roster)) {
       console.log('Successfully fetched league roster');
       res.json({
         rosterCount: rosterData.rosterCount,
-        roster: rosterData.roster
+        roster: rosterData.roster,
+        privateRoster: rosterData.privateRoster
       });
     } else {
       console.error('Unexpected roster data format:', rosterData);

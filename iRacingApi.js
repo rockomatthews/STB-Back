@@ -222,7 +222,8 @@ async function getLeagueRoster(leagueId) {
       console.log('Roster data response:', rosterDataResponse.data);
       return {
         rosterCount: response.data.data.roster_count,
-        roster: rosterDataResponse.data
+        roster: rosterDataResponse.data.roster,
+        privateRoster: rosterDataResponse.data.private_roster
       };
     } else {
       console.error('Invalid response structure:', response.data);
