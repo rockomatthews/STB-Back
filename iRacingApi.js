@@ -216,11 +216,14 @@ async function getLeagueRoster(leagueId) {
 
     console.log('Initial roster response:', response.data);
 
-    if (response.data && response.data.link) {
-      console.log('Fetching roster data from link:', response.data.link);
-      const rosterDataResponse = await instance.get(response.data.link);
+    if (response.data && response.data.data_url) {
+      console.log('Fetching roster data from URL:', response.data.data_url);
+      const rosterDataResponse = await instance.get(response.data.data_url);
       console.log('Roster data response:', rosterDataResponse.data);
-      return rosterDataResponse.data;
+      return {
+        rosterCount: response.data.data.roster_count,
+        roster: rosterDataResponse.data
+      };
     } else {
       console.error('Invalid response structure:', response.data);
       throw new Error('Invalid response from iRacing API for league roster');

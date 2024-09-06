@@ -154,16 +154,19 @@ app.get('/api/league-roster', async (req, res) => {
     const leagueId = 11489; // Your league ID
     console.log(`Fetching roster for league: ${leagueId}`);
 
-    const roster = await getLeagueRoster(leagueId);
+    const rosterData = await getLeagueRoster(leagueId);
     
-    if (roster && Array.isArray(roster)) {
+    if (rosterData && rosterData.roster && Array.isArray(rosterData.roster)) {
       console.log('Successfully fetched league roster');
-      res.json({ roster });
+      res.json({
+        rosterCount: rosterData.rosterCount,
+        roster: rosterData.roster
+      });
     } else {
-      console.error('Unexpected roster data format:', roster);
+      console.error('Unexpected roster data format:', rosterData);
       res.status(500).json({ 
         error: 'Received unexpected data format for roster', 
-        details: JSON.stringify(roster)
+        details: JSON.stringify(rosterData)
       });
     }
   } catch (error) {
