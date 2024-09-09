@@ -179,6 +179,51 @@ app.get('/api/league-roster', async (req, res) => {
   }
 });
 
+app.post('/api/place-bet', async (req, res) => {
+  const { userId, leagueId, seasonId, raceId, selectedDriverId, betAmount, odds } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('bets')
+      .insert({
+        user_id: userId,
+        league_id: leagueId,
+        season_id: seasonId,
+        race_id: raceId,
+        selected_driver_id: selectedDriverId,
+        bet_amount: betAmount,
+        odds: odds,
+        status: 'pending'
+      });
+
+    if (error) throw error;
+
+    res.json({ success: true, bet: data[0] });
+  } catch (error) {
+    console.error('Error placing bet:', error);
+    res.status(500).json({ error: 'Failed to place bet' });
+  }
+});
+
+// New endpoint to get user's bets
+app.get('/api/user-bets/:userId', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from('bets')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching user bets:', error);
+    res.status(500).json({ error: 'Failed to fetch user bets' });
+  }
+});
+
 // Start the server and attempt login to iRacing API
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
