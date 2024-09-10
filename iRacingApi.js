@@ -239,26 +239,46 @@ async function getLeagueRoster(leagueId) {
   }
 }
 // Periodic re-authentication
-const RE_AUTH_INTERVAL = 30 * 60 * 1000; // 30 minutes
+const RE_AUTH_INTERVAL = 15 * 60 * 1000; // 15 minutes
+const MAX_LOGIN_ATTEMPTS = 3;
+const LOGIN_RETRY_DELAY = 5000; // 5 seconds
 
 async function periodicReAuth() {
-  try {
-    const isAuthenticated = await verifyAuth();
-    if (!isAuthenticated) {
+  let attempts = 0;
+  while (attempts < MAX_LOGIN_ATTEMPTS) {
+    try {
+      const isAuthenticated = await verifyAuth();
+      if (isAuthenticated) {
+        console.log('Authentication verified successfully');
+        return;
+      }
       console.log('Session expired. Attempting to re-authenticate...');
-      await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
+      const loginSuccess = await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
+      if (loginSuccess) {
+        console.log('Re-authentication successful');
+        return;
+      }
+    } catch (error) {
+      console.error(`Re-authentication attempt ${attempts + 1} failed:`, error);
     }
-  } catch (error) {
-    console.error('Error during periodic re-authentication:', error);
+    attempts++;
+    if (attempts < MAX_LOGIN_ATTEMPTS) {
+      console.log(`Retrying in ${LOGIN_RETRY_DELAY / 1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, LOGIN_RETRY_DELAY));
+    }
   }
+  console.error('Max re-authentication attempts reached. Please check your credentials and network connection.');
 }
 
+// Set up periodic re-authentication
 setInterval(periodicReAuth, RE_AUTH_INTERVAL);
 
 // Initialize authentication on module load
 (async () => {
   try {
     await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
+    // Start the periodic re-authentication immediately after initial login
+    setInterval(periodicReAuth, RE_AUTH_INTERVAL);
   } catch (error) {
     console.error('Initial authentication failed:', error);
   }
