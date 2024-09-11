@@ -238,6 +238,38 @@ async function getLeagueRoster(leagueId) {
     throw error;
   }
 }
+
+// New function to get details for a specific race
+async function getRaceDetails(leagueId, seasonId, subsessionId) {
+  try {
+    const cookies = await cookieJar.getCookies(BASE_URL);
+    const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
+
+    const response = await instance.get(`${BASE_URL}/data/results/get`, {
+      params: {
+        subsession_id: subsessionId
+      },
+      headers: {
+        'Cookie': cookieString
+      }
+    });
+
+    if (response.data && response.data.link) {
+      const raceDetailsResponse = await instance.get(response.data.link);
+      return raceDetailsResponse.data;
+    } else {
+      throw new Error('Invalid response from iRacing API for race details');
+    }
+  } catch (error) {
+    console.error('Error fetching race details:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+    }
+    throw error;
+  }
+}
+
 // Periodic re-authentication
 const RE_AUTH_INTERVAL = 15 * 60 * 1000; // 15 minutes
 const MAX_LOGIN_ATTEMPTS = 3;
@@ -290,5 +322,6 @@ export {
   searchIRacingName,
   getLeagueSeasons,
   getLeagueSubsessions,
-  getLeagueRoster
+  getLeagueRoster,
+  getRaceDetails
 };
