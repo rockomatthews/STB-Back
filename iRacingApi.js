@@ -43,7 +43,7 @@ async function login(email, password) {
       response.headers['set-cookie'].forEach(cookie => {
         cookieJar.setCookieSync(cookie, BASE_URL);
       });
-      console.log('Cookies set:', await cookieJar.getCookies(BASE_URL));
+      console.log('Cookies set successfully');
       return true;
     } else {
       console.error('No cookies in response');
@@ -66,7 +66,7 @@ async function verifyAuth() {
     const cookies = await cookieJar.getCookies(BASE_URL);
     const cookieString = cookies.map(cookie => `${cookie.key}=${cookie.value}`).join('; ');
 
-    console.log('Verifying auth with cookies:', cookieString);
+    console.log('Verifying auth with cookies');
 
     const response = await instance.get(`${BASE_URL}/data/doc`, {
       headers: {
@@ -239,7 +239,6 @@ async function getLeagueRoster(leagueId) {
   }
 }
 
-// New function to get details for a specific race
 async function getRaceDetails(leagueId, seasonId, subsessionId) {
   try {
     const cookies = await cookieJar.getCookies(BASE_URL);
@@ -270,10 +269,9 @@ async function getRaceDetails(leagueId, seasonId, subsessionId) {
   }
 }
 
-// Periodic re-authentication
-const RE_AUTH_INTERVAL = 15 * 60 * 1000; // 15 minutes
-const MAX_LOGIN_ATTEMPTS = 3;
-const LOGIN_RETRY_DELAY = 5000; // 5 seconds
+const RE_AUTH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOGIN_RETRY_DELAY = 10000; // 10 seconds
 
 async function periodicReAuth() {
   let attempts = 0;
@@ -302,19 +300,34 @@ async function periodicReAuth() {
   console.error('Max re-authentication attempts reached. Please check your credentials and network connection.');
 }
 
-// Set up periodic re-authentication
-setInterval(periodicReAuth, RE_AUTH_INTERVAL);
+let reAuthInterval;
 
-// Initialize authentication on module load
+function startPeriodicReAuth() {
+  if (reAuthInterval) {
+    clearInterval(reAuthInterval);
+  }
+  reAuthInterval = setInterval(periodicReAuth, RE_AUTH_INTERVAL);
+  console.log('Periodic re-authentication started');
+}
+
 (async () => {
   try {
-    await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
-    // Start the periodic re-authentication immediately after initial login
-    setInterval(periodicReAuth, RE_AUTH_INTERVAL);
+    const loginSuccess = await login(process.env.IRACING_EMAIL, process.env.IRACING_PASSWORD);
+    if (loginSuccess) {
+      console.log('Initial authentication successful');
+      startPeriodicReAuth();
+    } else {
+      console.error('Initial authentication failed. Please check your credentials.');
+    }
   } catch (error) {
     console.error('Initial authentication failed:', error);
   }
 })();
+
+async function manualReAuth() {
+  await periodicReAuth();
+  startPeriodicReAuth();
+}
 
 export {
   login,
@@ -323,5 +336,6 @@ export {
   getLeagueSeasons,
   getLeagueSubsessions,
   getLeagueRoster,
-  getRaceDetails
+  getRaceDetails,
+  manualReAuth
 };
