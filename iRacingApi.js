@@ -187,23 +187,10 @@ async function getLeagueSubsessions(leagueId, seasonId) {
       const subsessionsResponse = await instance.get(response.data.link);
       const sessions = subsessionsResponse.data.sessions;
 
-      // Filter out races that ended more than 24 hours ago
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const filteredSessions = sessions.filter(session => {
-        const sessionEndTime = new Date(session.end_time);
-        return sessionEndTime > twentyFourHoursAgo;
-      }).map(session => ({
-        ...session,
-        start_time: new Date(session.start_time).toISOString(),
-        end_time: new Date(session.end_time).toISOString()
-      }));
+      console.log('Raw sessions data:', JSON.stringify(sessions, null, 2));
 
-      console.log(`Filtered sessions: ${filteredSessions.length}`);
-      filteredSessions.forEach(session => {
-        console.log(`Session: ${session.session_name}, Start: ${session.start_time}, End: ${session.end_time}`);
-      });
-
-      return { sessions: filteredSessions };
+      // For now, let's return all sessions without filtering
+      return { sessions: sessions };
     } else {
       throw new Error('Invalid response from iRacing API for league subsessions');
     }
