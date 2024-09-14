@@ -132,14 +132,14 @@ app.get('/api/league-subsessions', async (req, res) => {
 
     console.log(`Fetching subsessions for league: ${leagueId}, season: ${seasonId}`);
 
-    const subsessions = await getLeagueSubsessions(leagueId, seasonId);
+    const subsessionsData = await getLeagueSubsessions(leagueId, seasonId);
     console.log('Successfully fetched league subsessions');
 
     // Optional: Store subsessions in Supabase
-    if (subsessions && Array.isArray(subsessions)) {
+    if (subsessionsData.sessions && Array.isArray(subsessionsData.sessions)) {
       const { data, error } = await supabase
         .from('league_subsessions')
-        .upsert(subsessions.map(session => ({
+        .upsert(subsessionsData.sessions.map(session => ({
           ...session,
           league_id: leagueId,
           season_id: seasonId,
@@ -154,7 +154,7 @@ app.get('/api/league-subsessions', async (req, res) => {
       }
     }
 
-    res.json(subsessions);
+    res.json(subsessionsData);
   } catch (error) {
     console.error('Error fetching league subsessions:', error);
     res.status(500).json({ 

@@ -185,7 +185,19 @@ async function getLeagueSubsessions(leagueId, seasonId) {
 
     if (response.data && response.data.link) {
       const subsessionsResponse = await instance.get(response.data.link);
-      return subsessionsResponse.data;
+      const sessions = subsessionsResponse.data.sessions;
+
+      // Filter out expired races and ensure date is in ISO format
+      const currentTime = new Date().getTime();
+      const filteredSessions = sessions.filter(session => {
+        const sessionTime = new Date(session.start_time).getTime();
+        return sessionTime > currentTime;
+      }).map(session => ({
+        ...session,
+        start_time: new Date(session.start_time).toISOString()
+      }));
+
+      return { sessions: filteredSessions };
     } else {
       throw new Error('Invalid response from iRacing API for league subsessions');
     }
