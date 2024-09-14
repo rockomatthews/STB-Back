@@ -187,15 +187,21 @@ async function getLeagueSubsessions(leagueId, seasonId) {
       const subsessionsResponse = await instance.get(response.data.link);
       const sessions = subsessionsResponse.data.sessions;
 
-      // Filter out expired races and ensure date is in ISO format
-      const currentTime = new Date().getTime();
+      // Filter out races that ended more than 24 hours ago
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const filteredSessions = sessions.filter(session => {
-        const sessionTime = new Date(session.start_time).getTime();
-        return sessionTime > currentTime;
+        const sessionEndTime = new Date(session.end_time);
+        return sessionEndTime > twentyFourHoursAgo;
       }).map(session => ({
         ...session,
-        start_time: new Date(session.start_time).toISOString()
+        start_time: new Date(session.start_time).toISOString(),
+        end_time: new Date(session.end_time).toISOString()
       }));
+
+      console.log(`Filtered sessions: ${filteredSessions.length}`);
+      filteredSessions.forEach(session => {
+        console.log(`Session: ${session.session_name}, Start: ${session.start_time}, End: ${session.end_time}`);
+      });
 
       return { sessions: filteredSessions };
     } else {
