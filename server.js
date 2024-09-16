@@ -135,11 +135,22 @@ app.get('/api/league-subsessions', async (req, res) => {
     const subsessionsData = await getLeagueSubsessions(leagueId, seasonId);
     console.log('Successfully fetched league subsessions');
 
+    // Fetch roster information
+    const rosterData = await getLeagueRoster(leagueId);
+    console.log('Successfully fetched league roster');
+
+    // Combine subsessions with roster information
+    const sessionsWithRoster = subsessionsData.sessions.map(session => ({
+      ...session,
+      rosterCount: rosterData.rosterCount,
+      roster: rosterData.roster
+    }));
+
     // Optional: Store subsessions in Supabase
-    if (subsessionsData.sessions && Array.isArray(subsessionsData.sessions)) {
+    if (sessionsWithRoster && Array.isArray(sessionsWithRoster)) {
       const { data, error } = await supabase
         .from('league_subsessions')
-        .upsert(subsessionsData.sessions.map(session => ({
+        .upsert(sessionsWithRoster.map(session => ({
           ...session,
           league_id: leagueId,
           season_id: seasonId,
@@ -154,7 +165,7 @@ app.get('/api/league-subsessions', async (req, res) => {
       }
     }
 
-    res.json(subsessionsData);
+    res.json({ sessions: sessionsWithRoster });
   } catch (error) {
     console.error('Error fetching league subsessions:', error);
     res.status(500).json({ 
