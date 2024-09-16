@@ -187,10 +187,23 @@ async function getLeagueSubsessions(leagueId, seasonId) {
       const subsessionsResponse = await instance.get(response.data.link);
       const sessions = subsessionsResponse.data.sessions;
 
-      console.log('Raw sessions data:', JSON.stringify(sessions, null, 2));
+      // Filter sessions to include upcoming and practice sessions
+      const currentTime = new Date().getTime();
+      const filteredSessions = sessions.filter(session => {
+        const sessionTime = new Date(session.launch_at).getTime();
+        // Include if the session is in the future or if it's currently in practice
+        return sessionTime > currentTime || session.status === 2; // Assuming 2 is the status code for practice
+      }).map(session => ({
+        ...session,
+        start_time: new Date(session.launch_at).toISOString()
+      }));
 
-      // For now, let's return all sessions without filtering
-      return { sessions: sessions };
+      console.log(`Filtered sessions: ${filteredSessions.length}`);
+      filteredSessions.forEach(session => {
+        console.log(`Session: ${session.session_name}, Start: ${session.start_time}, Status: ${session.status}`);
+      });
+
+      return { sessions: filteredSessions };
     } else {
       throw new Error('Invalid response from iRacing API for league subsessions');
     }
